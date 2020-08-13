@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/mit-dci/utreexo/util"
+	"github.com/BoltonBailey/utreexo/util"
 )
 
 // run IBD from block proof data

@@ -5,8 +5,8 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/mit-dci/utreexo/accumulator"
-	"github.com/mit-dci/utreexo/util"
+	"github.com/BoltonBailey/utreexo/accumulator"
+	"github.com/BoltonBailey/utreexo/util"
 )
 
 /*

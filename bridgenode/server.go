@@ -6,7 +6,7 @@ import (
 	"math"
 	"net"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/BoltonBailey/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 

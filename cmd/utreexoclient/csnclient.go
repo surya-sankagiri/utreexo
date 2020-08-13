@@ -10,7 +10,7 @@ import (
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/mit-dci/utreexo/csn"
+	"github.com/BoltonBailey/utreexo/csn"
 )
 
 var msg = `

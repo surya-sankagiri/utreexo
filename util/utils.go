@@ -13,7 +13,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/mit-dci/utreexo/accumulator"
+	"github.com/BoltonBailey/utreexo/accumulator"
 )
 
 // Hash is just [32]byte

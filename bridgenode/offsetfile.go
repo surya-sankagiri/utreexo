@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/mit-dci/utreexo/util"
+	"github.com/BoltonBailey/utreexo/util"
 )
 
 // buildOffsetFile builds an offsetFile which acts as an index

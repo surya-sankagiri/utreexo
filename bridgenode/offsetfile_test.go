@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/mit-dci/utreexo/util"
+	"github.com/BoltonBailey/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 

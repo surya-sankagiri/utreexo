@@ -66,7 +66,7 @@ func TestVerifyBatchProof(t *testing.T) {
 // We prove one node, then delete the other one.
 // Now, the proof of the first node should not pass verification.
 
-// Full explanation: https://github.com/mit-dci/utreexo/pull/95#issuecomment-599390850
+// Full explanation: https://github.com/BoltonBailey/utreexo/pull/95#issuecomment-599390850
 func TestProofShouldNotValidateAfterNodeDeleted(t *testing.T) {
 	adds := make([]Leaf, 2)
 	proofIndex := 1
