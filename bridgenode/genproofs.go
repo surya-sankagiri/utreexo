@@ -2,15 +2,16 @@ package bridgenode
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/BoltonBailey/utreexo/accumulator"
 	"github.com/BoltonBailey/utreexo/util"
+	"github.com/btcsuite/btcd/chaincfg"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -83,6 +84,14 @@ func BuildProofs(
 
 	var stop bool // bool for stopping the main loop
 
+	// Make a file for saving the proof size data
+	datafile, err := os.OpenFile("sizedata.csv",
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+	}
+	defer datafile.Close()
+
 	for ; height != knownTipHeight && !stop; height++ {
 
 		// Receive txs from the asynchronous blk*.dat reader
@@ -106,6 +115,11 @@ func BuildProofs(
 
 		// convert UData struct to bytes
 		b := ud.ToBytes()
+
+		// In theory, all I have to do is to pipe height and len(b) to a file
+		if _, err := datafile.WriteString(fmt.Sprintf("%d, %d \n", height, len(b))); err != nil {
+			log.Println(err)
+		}
 
 		// Add to WaitGroup and send data to channel to be written
 		// to disk
