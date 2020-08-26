@@ -3,6 +3,7 @@ package accumulator
 import (
 	"encoding/binary"
 	"fmt"
+	"math/bits"
 	"os"
 	"sort"
 	"time"
@@ -59,8 +60,11 @@ type Forest struct {
 	// at that point to do runs of i/o).  Not sure about "deleting" as it
 	// might not be needed at all with a slice.
 
-	positionMap map[MiniHash]uint64 // map from hashes to positions.
+	// It doesn't matter too much how much the forest data is structured, since we are focusing on improving proof sizes
+	positionMap map[MiniHash]uint64
 	// Inverse of forestMap for leaves.
+
+	particiaLookup PatriciaLookup
 
 	/*
 	 * below are just for testing / benchmarking
@@ -95,6 +99,63 @@ type Forest struct {
 	//
 	// Meant for testing / benchmarking
 	TimeInVerify time.Duration
+}
+
+type PatriciaLookup struct {
+	treeNodes map[Hash]PatriciaNode
+}
+
+type PatriciaNode struct {
+	left     Hash
+	right    Hash
+	midpoint uint64 // The midpoint of the binary interval represented by the common
+}
+
+func (p *PatriciaNode) min() uint64 {
+	halfWidth := ((p.midpoint - 1) & p.midpoint) ^ p.midpoint
+	return p.midpoint - halfWidth
+}
+
+func (p *PatriciaNode) max() uint64 {
+	halfWidth := ((p.midpoint - 1) & p.midpoint) ^ p.midpoint
+	return p.midpoint + halfWidth
+}
+
+func (p *PatriciaNode) inRange(v uint64) bool {
+	return p.min() <= v && v < p.max()
+}
+
+func (p *PatriciaNode) inLeft(v uint64) bool {
+	return p.min() <= v && v < p.midpoint
+}
+
+func newPatriciaNode(child1, child2 *PatriciaNode) *PatriciaNode {
+
+	p := new(PatriciaNode)
+
+	var leftChild, rightChild *PatriciaNode
+
+	if child1.min() < child2.max() {
+		leftChild = child1
+		rightChild = child2
+	} else {
+		leftChild = child2
+		rightChild = child1
+	}
+
+	p.left = leftChild.hash()
+	p.right = rightChild.hash()
+
+	differentBits := leftChild.midpoint ^ rightChild.midpoint
+
+	i := bits.Reverse64(differentBits)
+	i = i &^ (i - 1)
+	i = bits.Reverse64(i)
+	// i is first different bit between child midpoints
+
+	p.midpoint = (leftChild.midpoint &^ (i - 1)) | i
+
+	return p
 }
 
 // NewForest : use ram if not given a file
@@ -399,12 +460,15 @@ func (f *Forest) addv2(adds []Leaf) {
 // adds, which show up on the right.
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
 func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
-	numdels, numadds := len(dels), len(adds)
-	delta := int64(numadds - numdels) // watch 32/64 bit
+
+	numDels, numAdds := len(dels), len(adds)
+	delta := int64(numAdds - numDels) // watch 32/64 bit
+
 	if int64(f.numLeaves)+delta < 0 {
 		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
 			len(dels), f.numLeaves)
 	}
+
 	if !checkSortedNoDupes(dels) { // check for sorted deletion slice
 		fmt.Printf("%v\n", dels)
 		return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
@@ -429,7 +493,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	f.cleanup(uint64(numdels))
+	f.cleanup(uint64(numDels))
 
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?
@@ -504,39 +568,40 @@ func (f *Forest) reMap(destRows uint8) error {
 	return nil
 }
 
-// sanity checks forest sanity: does numleaves make sense, and are the roots
-// populated?
-func (f *Forest) sanity() error {
+// // Don't think I need this so commenting out - Bolton
+// // sanity checks forest sanity: does numleaves make sense, and are the roots
+// // populated?
+// func (f *Forest) sanity() error {
 
-	if f.numLeaves > 1<<f.rows {
-		return fmt.Errorf("forest has %d leaves but insufficient rows %d",
-			f.numLeaves, f.rows)
-	}
-	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
-	for _, t := range rootPositions {
-		if f.data.read(t) == empty {
-			return fmt.Errorf("Forest has %d leaves %d roots, but root @%d is empty",
-				f.numLeaves, len(rootPositions), t)
-		}
-	}
-	if uint64(len(f.positionMap)) > f.numLeaves {
-		return fmt.Errorf("sanity: positionMap %d leaves but forest %d leaves",
-			len(f.positionMap), f.numLeaves)
-	}
+// 	if f.numLeaves > 1<<f.rows {
+// 		return fmt.Errorf("forest has %d leaves but insufficient rows %d",
+// 			f.numLeaves, f.rows)
+// 	}
+// 	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
+// 	for _, t := range rootPositions {
+// 		if f.data.read(t) == empty {
+// 			return fmt.Errorf("Forest has %d leaves %d roots, but root @%d is empty",
+// 				f.numLeaves, len(rootPositions), t)
+// 		}
+// 	}
+// 	if uint64(len(f.positionMap)) > f.numLeaves {
+// 		return fmt.Errorf("sanity: positionMap %d leaves but forest %d leaves",
+// 			len(f.positionMap), f.numLeaves)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
-// PosMapSanity is costly / slow: check that everything in posMap is correct
-func (f *Forest) PosMapSanity() error {
-	for i := uint64(0); i < f.numLeaves; i++ {
-		if f.positionMap[f.data.read(i).Mini()] != i {
-			return fmt.Errorf("positionMap error: map says %x @%d but @%d",
-				f.data.read(i).Prefix(), f.positionMap[f.data.read(i).Mini()], i)
-		}
-	}
-	return nil
-}
+// // PosMapSanity is costly / slow: check that everything in posMap is correct
+// func (f *Forest) PosMapSanity() error {
+// 	for i := uint64(0); i < f.numLeaves; i++ {
+// 		if f.positionMap[f.data.read(i).Mini()] != i {
+// 			return fmt.Errorf("positionMap error: map says %x @%d but @%d",
+// 				f.data.read(i).Prefix(), f.positionMap[f.data.read(i).Mini()], i)
+// 		}
+// 	}
+// 	return nil
+// }
 
 // RestoreForest restores the forest on restart. Needed when resuming after exiting.
 // miscForestFile is where numLeaves and rows is stored
