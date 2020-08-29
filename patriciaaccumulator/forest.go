@@ -158,6 +158,17 @@ func newPatriciaNode(child1, child2 *PatriciaNode) *PatriciaNode {
 	return p
 }
 
+func NewPatriciaLookup() *PatriciaLookup {
+	t := new(PatriciaLookup)
+	t.treeNodes = make(map[Hash]PatriciaNode)
+}
+
+func (t *PatriciaLookup) merge(other *PatriciaLookup) {
+	for hash, node := range other.treeNodes {
+		t.treeNodes[hash] = node
+	}
+}
+
 // NewForest : use ram if not given a file
 func NewForest(forestFile *os.File, cached bool) *Forest {
 	f := new(Forest)
