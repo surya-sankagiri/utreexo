@@ -35,7 +35,7 @@ type arrow struct {
 
 // Node :
 type node struct {
-	Pos uint64
+	Pos uint64 // In the trie code, this can represent the midpoint of the prefix interval
 	Val Hash
 }
 
