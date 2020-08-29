@@ -1,6 +1,7 @@
 package accumulator
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"math/bits"
