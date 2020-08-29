@@ -169,6 +169,64 @@ func (t *PatriciaLookup) merge(other *PatriciaLookup) {
 	}
 }
 
+//similar to Prove in forestproofs.go
+func (t *PatriciaLookup) search_proof(state_root Hash, location uint64) (bool, []PatriciaNode, error) {
+	var proof []PatriciaNode
+	var node PatriciaNode
+	var nodeNeighbor PatriciaNode
+	node, ok := t.treeNodes[state_root]
+	if !ok {
+		return false, proof, fmt.Errorf("state root %x not found", state_root)
+	}
+	proof = make([]PatriciaNode, 64) // How do we set the capacity beforehand? See this codebase's implementation
+	var hash Hash
+	var neighbor Hash
+	var i := 0 // index for loop
+	for {
+		proof[2*i] = node
+		if !node.inRange(location) {
+			// The target location is not in range
+			// This proves the location is not in the state.
+			return false, proof, nil
+		}
+
+		// If the min is the max, we have the whole hash so we are at the leaf,
+		if node.left == node.right {
+			// We must check if the hash is in the lookup table
+			// This cannot be done if account data is missing
+			/*
+			if !self.account_data.contains_key(&node.left) {
+				debug!("ERROR: lookup not constructed properly; missing AccountState");
+				assert!(false);
+			} 
+			else {
+				//let prospective_account: AccountState = self.account_data[&node.left].clone();
+				//assert!(location == prospective_account.get_address()); */
+				return true, proof, nil //this is the only condition when return true
+			//}
+		}
+		if node.common.inLeft(location) {
+			hash = node.left
+			neighbor = node.right
+		} else {
+			hash = node.right
+			neighbor = node.left
+		}
+		// We are not yet at the leaf, so we descend the tree.
+		node, ok = t.treeNodes[hash]
+		if !ok {
+			return false, proof, fmt.Errorf("Patricia Node %x not found", hash)
+		}
+		nodeNeighbor, ok = t.treeNodes[neighbor]
+		if !ok {
+			return false, proof, fmt.Errorf("Patricia Node %x not found", neigbor)
+		}
+		proof[2*i + 1] = node
+
+	}
+}
+
+}
 // NewForest : use ram if not given a file
 func NewForest(forestFile *os.File, cached bool) *Forest {
 	f := new(Forest)
