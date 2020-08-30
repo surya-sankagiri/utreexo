@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/btcsuite/btcd/wire"
 	"github.com/BoltonBailey/utreexo/accumulator"
+	"github.com/btcsuite/btcd/wire"
 )
 
 type Hash [32]byte
@@ -46,6 +46,18 @@ type UData struct {
 	AccProof accumulator.BatchProof
 	UtxoData []LeafData
 	LeafTTLs []uint32
+}
+
+// PatriciaProof is a potential replacement structure for UData in the trie - Bolton
+type PatriciaProof struct {
+	hashes    []Hash   // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
+	midpoints []uint64 // List of equal midpoints of nodes that are ancestors of deleted elements
+	// Checking a proof requires all midpoints in the branch to the element, and all hashes of siblings
+	// We therefore have the midpoint tree. Our first step in proof checking is constructing this tree
+	// We then have to fill in the hashes of the children we proceed in order left to right
+	// 1. when a hash is a leaf, we have that hash
+	// 2. when we don't have a leaf, we take the next element of hashes, and we order hashes so that this element is the correct next one.
+
 }
 
 // LeafData is all the data that goes into a leaf in the utreexo accumulator

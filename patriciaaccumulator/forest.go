@@ -1,6 +1,7 @@
 package accumulator
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"math/bits"
@@ -129,6 +130,17 @@ func (p *PatriciaNode) inLeft(v uint64) bool {
 	return p.min() <= v && v < p.midpoint
 }
 
+func (p *PatriciaNode) hash() Hash {
+	var empty Hash
+	if p.left == empty || p.right == empty {
+		panic("got an empty leaf here. ")
+	}
+	hashBytes := append(p.left[:], p.right[:]...)
+	midpointBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(midpointBytes, p.midpoint)
+	return sha256.Sum256(append(hashBytes, midpointBytes...))
+}
+
 func newPatriciaNode(child1, child2 *PatriciaNode) *PatriciaNode {
 
 	p := new(PatriciaNode)
@@ -221,8 +233,7 @@ func (t *PatriciaLookup) search_proof(state_root Hash, location uint64) (bool, [
 		if !ok {
 			return false, proof, fmt.Errorf("Patricia Node %x not found", neigbor)
 		}
-		proof[2*i + 1] = node
-
+		proof[2*i + 1] = nodeNeighbor
 	}
 }
 
