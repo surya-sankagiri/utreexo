@@ -182,13 +182,13 @@ func (t *PatriciaLookup) merge(other *PatriciaLookup) {
 }
 
 //similar to Prove in forestproofs.go
-func (t *PatriciaLookup) search_proof(state_root Hash, location uint64) (bool, []PatriciaNode, error) {
+func (t *PatriciaLookup) search_proof(stateRoot Hash, location uint64) (bool, []PatriciaNode, error) {
 	var proof []PatriciaNode
 	var node PatriciaNode
 	var nodeNeighbor PatriciaNode
-	node, ok := t.treeNodes[state_root]
+	node, ok := t.treeNodes[stateRoot]
 	if !ok {
-		return false, proof, fmt.Errorf("state root %x not found", state_root)
+		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
 	}
 	proof = make([]PatriciaNode, 64) // How do we set the capacity beforehand? See this codebase's implementation
 	var hash Hash
@@ -237,7 +237,91 @@ func (t *PatriciaLookup) search_proof(state_root Hash, location uint64) (bool, [
 	}
 }
 
+//similar to add in forest.go
+func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash, error) {
+	/// let state_root = state_root.root; Rust Code
+
+	// TODO: do not add anything until all errors have been ruled out
+	var branch []PatriciaNode
+	// create a new PN that stores the above AccountState exclusively and add it to tree_nodes
+	
+	p := new(PatriciaNode)
+	p.left = toAdd
+	p.right = toAdd
+	p.midpoint = location
+
+	t.treeNodes[p.hash()] = p
+
+	node, ok := t.treeNodes[stateRoot]
+	if !ok {
+		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
+	}
+	let mut node_to_add: PatriciaNode;
+	let mut hash: H256;
+	let mut neighbor: H256;
+	let mut sibling: PatriciaNode;
+
+	loop {
+		if !node.common.in_range(&location) {
+			// The target location is not in range
+			// This proves the location is not in the state.
+			// We replace node with the combination of node and the new leaf
+			node_to_add = PatriciaNode::new(&new_leaf_node, &node);
+			self.tree_nodes
+				.insert(node_to_add.hash(), node_to_add.clone());
+			while branch.len() > 0 {
+				// We travel up the branch, recombining nodes
+				sibling = branch.pop().unwrap();
+				node_to_add = PatriciaNode::new(&sibling, &node_to_add);
+				self.tree_nodes
+					.insert(node_to_add.hash(), node_to_add.clone());
+			}
+			return MerkleRoot {
+				root: node_to_add.hash(),
+			};
+		}
+		// If the min is the max, we have the whole hash so we are at the leaf,
+		if node.common.min == node.common.max {
+			// We must check if the hash is in the lookup table
+			if !self.account_data.contains_key(&node.left) {
+				debug!("ERROR: lookup not constructed properly; missing AccountState");
+				assert!(false);
+			} else {
+				// let prospective_account: AccountState = self.account_data[&node.left].clone();
+				// If we are adding a node, then we are overwriting the previous node.
+				node_to_add = new_leaf_node;
+				while branch.len() > 0 {
+					// We travel up the branch, recombining nodes
+					sibling = branch.pop().unwrap();
+					node_to_add = PatriciaNode::new(&sibling, &node_to_add);
+					self.tree_nodes
+						.insert(node_to_add.hash(), node_to_add.clone());
+				}
+				return MerkleRoot {
+					root: node_to_add.hash(),
+				};
+			}
+		}
+		// We are not yet at the leaf, so we descend the tree.
+		// Determine if we descend left or right
+		if node.common.in_left(&location) {
+			hash = node.left;
+			neighbor = node.right;
+		} else {
+			hash = node.right;
+			neighbor = node.left;
+		}
+		if !self.tree_nodes.contains_key(&hash) || !self.tree_nodes.contains_key(&neighbor) {
+			debug!("ERROR: lookup not constructed properly; missing PatriciaNode");
+			assert!(false);
+		}
+		// Add the other direction node to the branch
+		branch.push(self.tree_nodes[&neighbor].clone());
+		// Update node down the tree
+		node = self.tree_nodes[&hash].clone();
+	} // End loop
 }
+
 // NewForest : use ram if not given a file
 func NewForest(forestFile *os.File, cached bool) *Forest {
 	f := new(Forest)
