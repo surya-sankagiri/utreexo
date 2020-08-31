@@ -1,4 +1,4 @@
-package accumulator
+package patriciaaccumulator
 
 // hashableNode is the data needed to perform a hash
 type hashableNode struct {

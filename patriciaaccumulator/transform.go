@@ -1,4 +1,4 @@
-package accumulator
+package patriciaaccumulator
 
 // remTrans returns a slice arrow in bottom row to top row.
 // also returns all "dirty" positions which need to be hashed after the swaps

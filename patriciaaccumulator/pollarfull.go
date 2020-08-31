@@ -1,4 +1,4 @@
-package accumulator
+package patriciaaccumulator
 
 import (
 	"fmt"

@@ -154,4 +154,4 @@ position. Getting the position of the Polnode is done through grabPos()/descendT
 methods.
 
 */
-package accumulator
+package patriciaaccumulator
