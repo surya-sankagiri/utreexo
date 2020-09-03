@@ -185,9 +185,22 @@ func (t *PatriciaLookup) merge(other *PatriciaLookup) {
 
 // similar to Prove in forestproofs.go?
 // adapted from PatricialookupHelper in Rust code
-// TODO: return the proof as a PatriciaProof (see batchproof.go)
+// TODO: return the proof as a PatriciaProof (see batchproof.go) (working on it)
 
-func (t *PatriciaLookup) retrieve_proof(stateRoot Hash, target uint64) (PatriciaProof, error) {
+func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) PatriciaProof {
+	var proof PatriciaProof
+	proof.targets = []uint64{target}
+	//reverse the order of midpoints and neighborHashes so as to include trees first
+	for i, j := 0, len(midpoints)-1; i < j; i, j = i+1, j-1 {
+		midpoints[i], midpoints[j] = midpoints[j], midpoints[i]
+	}
+	for i, j := 0, len(neighborHashes)-1; i < j; i, j = i+1, j-1 {
+		neighborHashes[i], neighborHashes[j] = neighborHashes[j], neighborHashes[i]
+	}
+	return proof
+}
+
+func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaProof, error) {
 	var proof PatriciaProof
 	var node PatriciaNode
 	var nodeHash Hash
@@ -204,27 +217,18 @@ func (t *PatriciaLookup) retrieve_proof(stateRoot Hash, target uint64) (Patricia
 	for {
 		midpoints = append(midpoints, node.midpoint)
 		if !node.inRange(target) {
-			// The target location is not in range
-			// This proves the location is not in the state.
+			// The target location is not in range; this is an arror
 			// REMARK (SURYA): The current system has no use for proof of non-existence, nor has the means to create one
 			return proof, fmt.Errorf("target location %d not found", target)
 		}
 
 		// If the min is the max, we are at a leaf
 		if node.left == node.right {
-			var nodeHash Hash
-			var neighborHash Hash
-			// REMARK (SURYA): We do 
-			// We must check if the hash is in the lookup table
-			//if !self.account_data.contains_key(&node.left) {
-			//	debug!("ERROR: lookup not constructed properly; missing AccountState");
-			//	assert!(false);
-			//} 
-			//else {
-			//	let prospective_account: AccountState = self.account_data[&node.left].clone();
-			//	assert!(location == prospective_account.get_address());
-			//	return true, proof, nil //this is the only condition when return true
-			//}
+			// REMARK (SURYA): We do not check whether the hash corresponds to the hash of a leaf
+			//perform a sanity check here
+			if len(midpoints) != len(neighborHashes) {
+				return proof, fmt.Errorf("# midpoints %d, #hashes %d", len(midpoints), len(neighborHashes))
+			}
 			proof = ConstructProof(target, midpoints, neighborHashes) // TODO: code this function
 			return proof, nil
 		}
