@@ -16,7 +16,7 @@ import (
 
 // PatriciaProof is a potential replacement structure for BatchProof in the PatriciaAccumulator Implementation - Bolton
 type PatriciaProof struct {
-	Targets   []uint64
+	targets   []uint64
 	hashes    []Hash   // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
 	midpoints []uint64 // List of equal midpoints of nodes that are ancestors of deleted elements
 	// Checking a proof requires all midpoints in the branch to the element, and all hashes of siblings
