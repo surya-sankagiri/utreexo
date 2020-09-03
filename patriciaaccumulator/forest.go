@@ -187,59 +187,65 @@ func (t *PatriciaLookup) merge(other *PatriciaLookup) {
 // adapted from PatricialookupHelper in Rust code
 // TODO: return the proof as a PatriciaProof (see batchproof.go)
 
-func (t *PatriciaLookup) retrieve_proof(stateRoot Hash, location uint64) (bool, []PatriciaNode, error) {
-	var proof []PatriciaNode
+func (t *PatriciaLookup) retrieve_proof(stateRoot Hash, target uint64) (PatriciaProof, error) {
+	var proof PatriciaProof
 	var node PatriciaNode
-	var nodeNeighbor PatriciaNode
+	var nodeHash Hash
+	var neighborHash Hash
+	var midpoints = make([]uint64, 0, 64)
+	var neighborHashes = make([]Hash, 0, 64)
+	var ok bool
 	// Start at the root of the tree
-	node, ok := t.treeNodes[stateRoot]
+	node, ok = t.treeNodes[stateRoot]
 	if !ok {
-		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
+		return proof, fmt.Errorf("state root %x not found", stateRoot)
 	}
-	proof = make([]PatriciaNode, 0, 64)
-	var hash Hash
-	var neighbor Hash
-	var i := 0 // index for loop
+	// Discover the path to the leaf
 	for {
-		proof = append(proof, node)
-		if !node.inRange(location) {
+		midpoints = append(midpoints, node.midpoint)
+		if !node.inRange(target) {
 			// The target location is not in range
 			// This proves the location is not in the state.
-			return false, proof, nil
+			// REMARK (SURYA): The current system has no use for proof of non-existence, nor has the means to create one
+			return proof, fmt.Errorf("target location %d not found", target)
 		}
 
-		// If the min is the max, we have the whole hash so we are at the leaf,
+		// If the min is the max, we are at a leaf
 		if node.left == node.right {
+			var nodeHash Hash
+			var neighborHash Hash
+			// REMARK (SURYA): We do 
 			// We must check if the hash is in the lookup table
-			// This cannot be done if account data is missing
-			/*
-			if !self.account_data.contains_key(&node.left) {
-				debug!("ERROR: lookup not constructed properly; missing AccountState");
-				assert!(false);
-			} 
-			else {
-				//let prospective_account: AccountState = self.account_data[&node.left].clone();
-				//assert!(location == prospective_account.get_address()); */
-				return true, proof, nil //this is the only condition when return true
+			//if !self.account_data.contains_key(&node.left) {
+			//	debug!("ERROR: lookup not constructed properly; missing AccountState");
+			//	assert!(false);
+			//} 
+			//else {
+			//	let prospective_account: AccountState = self.account_data[&node.left].clone();
+			//	assert!(location == prospective_account.get_address());
+			//	return true, proof, nil //this is the only condition when return true
 			//}
+			proof = ConstructProof(target, midpoints, neighborHashes) // TODO: code this function
+			return proof, nil
 		}
-		if node.common.inLeft(location) {
-			hash = node.left
-			neighbor = node.right
+		if node.inLeft(target) {
+			nodeHash = node.left
+			neighborHash = node.right
 		} else {
-			hash = node.right
-			neighbor = node.left
+			nodeHash = node.right
+			neighborHash = node.left
 		}
+
 		// We are not yet at the leaf, so we descend the tree.
-		node, ok = t.treeNodes[hash]
+		node, ok = t.treeNodes[nodeHash]
 		if !ok {
-			return false, proof, fmt.Errorf("Patricia Node %x not found", hash)
+			return proof, fmt.Errorf("Patricia Node %x not found", nodeHash)
 		}
-		nodeNeighbor, ok = t.treeNodes[neighbor]
+		_, ok = t.treeNodes[neighborHash]
 		if !ok {
-			return false, proof, fmt.Errorf("Patricia Node %x not found", neigbor)
+			return proof, fmt.Errorf("Patricia Node %x not found", neighborHash)
 		}
-		proof = append(proof, nodeNeighbor)
+		neighborHashes = append(neighborHashes, neighborHash)
 	}
 }
 
@@ -327,6 +333,10 @@ func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash,
 		node = self.tree_nodes[&hash].clone();
 	} // End loop
 }
+
+// END OF OUR CODE //
+
+//BEGINNING OF UTREEXO CODE //
 
 // NewForest : use ram if not given a file
 func NewForest(forestFile *os.File, cached bool) *Forest {
