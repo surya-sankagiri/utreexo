@@ -42,7 +42,6 @@ type Forest struct {
 	maxLeaf uint64 // the index of the largest leaf that has ever existed in the trie
 	// I think this will be necessary in the add function
 	// TODO make sure maxLeaf is updated correctly
-
 	// rows in the forest. (forest height) NON INTUITIVE!
 	// When there is only 1 tree in the forest, it is equal to the rows of
 	// that tree (2**h nodes).  If there are multiple trees, rows will
@@ -184,21 +183,25 @@ func (t *PatriciaLookup) merge(other *PatriciaLookup) {
 	}
 }
 
-//similar to Prove in forestproofs.go
-func (t *PatriciaLookup) search_proof(stateRoot Hash, location uint64) (bool, []PatriciaNode, error) {
+// similar to Prove in forestproofs.go?
+// adapted from PatricialookupHelper in Rust code
+// TODO: return the proof as a PatriciaProof (see batchproof.go)
+
+func (t *PatriciaLookup) retrieve_proof(stateRoot Hash, location uint64) (bool, []PatriciaNode, error) {
 	var proof []PatriciaNode
 	var node PatriciaNode
 	var nodeNeighbor PatriciaNode
+	// Start at the root of the tree
 	node, ok := t.treeNodes[stateRoot]
 	if !ok {
 		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
 	}
-	proof = make([]PatriciaNode, 64) // How do we set the capacity beforehand? See this codebase's implementation
+	proof = make([]PatriciaNode, 0, 64)
 	var hash Hash
 	var neighbor Hash
 	var i := 0 // index for loop
 	for {
-		proof[2*i] = node
+		proof = append(proof, node)
 		if !node.inRange(location) {
 			// The target location is not in range
 			// This proves the location is not in the state.
@@ -236,7 +239,7 @@ func (t *PatriciaLookup) search_proof(stateRoot Hash, location uint64) (bool, []
 		if !ok {
 			return false, proof, fmt.Errorf("Patricia Node %x not found", neigbor)
 		}
-		proof[2*i + 1] = nodeNeighbor
+		proof = append(proof, nodeNeighbor)
 	}
 }
 
