@@ -39,6 +39,9 @@ There might be a better / optimal way to do this but it seems OK for now.
 // This tree would have a row of 2.
 type Forest struct {
 	numLeaves uint64 // number of leaves in the forest (bottom row)
+	maxLeaf uint64 // the index of the largest leaf that has ever existed in the trie
+	// I think this will be necessary in the add function
+	// TODO make sure maxLeaf is updated correctly
 
 	// rows in the forest. (forest height) NON INTUITIVE!
 	// When there is only 1 tree in the forest, it is equal to the rows of
