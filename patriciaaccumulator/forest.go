@@ -42,7 +42,6 @@ type Forest struct {
 	maxLeaf uint64 // the index of the largest leaf that has ever existed in the trie
 	// I think this will be necessary in the add function
 	// TODO make sure maxLeaf is updated correctly
-
 	// rows in the forest. (forest height) NON INTUITIVE!
 	// When there is only 1 tree in the forest, it is equal to the rows of
 	// that tree (2**h nodes).  If there are multiple trees, rows will
@@ -184,59 +183,73 @@ func (t *PatriciaLookup) merge(other *PatriciaLookup) {
 	}
 }
 
-//similar to Prove in forestproofs.go
-func (t *PatriciaLookup) search_proof(stateRoot Hash, location uint64) (bool, []PatriciaNode, error) {
-	var proof []PatriciaNode
-	var node PatriciaNode
-	var nodeNeighbor PatriciaNode
-	node, ok := t.treeNodes[stateRoot]
-	if !ok {
-		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
+// similar to Prove in forestproofs.go?
+// adapted from PatricialookupHelper in Rust code
+// TODO: return the proof as a PatriciaProof (see batchproof.go) (working on it)
+
+func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) PatriciaProof {
+	var proof PatriciaProof
+	proof.targets = []uint64{target}
+	//reverse the order of midpoints and neighborHashes so as to include trees first
+	for i, j := 0, len(midpoints)-1; i < j; i, j = i+1, j-1 {
+		midpoints[i], midpoints[j] = midpoints[j], midpoints[i]
 	}
-	proof = make([]PatriciaNode, 64) // How do we set the capacity beforehand? See this codebase's implementation
-	var hash Hash
-	var neighbor Hash
-	var i := 0 // index for loop
+	for i, j := 0, len(neighborHashes)-1; i < j; i, j = i+1, j-1 {
+		neighborHashes[i], neighborHashes[j] = neighborHashes[j], neighborHashes[i]
+	}
+	return proof
+}
+
+func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaProof, error) {
+	var proof PatriciaProof
+	var node PatriciaNode
+	var nodeHash Hash
+	var neighborHash Hash
+	var midpoints = make([]uint64, 0, 64)
+	var neighborHashes = make([]Hash, 0, 64)
+	var ok bool
+	// Start at the root of the tree
+	node, ok = t.treeNodes[stateRoot]
+	if !ok {
+		return proof, fmt.Errorf("state root %x not found", stateRoot)
+	}
+	// Discover the path to the leaf
 	for {
-		proof[2*i] = node
-		if !node.inRange(location) {
-			// The target location is not in range
-			// This proves the location is not in the state.
-			return false, proof, nil
+		midpoints = append(midpoints, node.midpoint)
+		if !node.inRange(target) {
+			// The target location is not in range; this is an arror
+			// REMARK (SURYA): The current system has no use for proof of non-existence, nor has the means to create one
+			return proof, fmt.Errorf("target location %d not found", target)
 		}
 
-		// If the min is the max, we have the whole hash so we are at the leaf,
+		// If the min is the max, we are at a leaf
 		if node.left == node.right {
-			// We must check if the hash is in the lookup table
-			// This cannot be done if account data is missing
-			/*
-			if !self.account_data.contains_key(&node.left) {
-				debug!("ERROR: lookup not constructed properly; missing AccountState");
-				assert!(false);
-			} 
-			else {
-				//let prospective_account: AccountState = self.account_data[&node.left].clone();
-				//assert!(location == prospective_account.get_address()); */
-				return true, proof, nil //this is the only condition when return true
-			//}
+			// REMARK (SURYA): We do not check whether the hash corresponds to the hash of a leaf
+			//perform a sanity check here
+			if len(midpoints) != len(neighborHashes) {
+				return proof, fmt.Errorf("# midpoints %d, #hashes %d", len(midpoints), len(neighborHashes))
+			}
+			proof = ConstructProof(target, midpoints, neighborHashes) // TODO: code this function
+			return proof, nil
 		}
-		if node.common.inLeft(location) {
-			hash = node.left
-			neighbor = node.right
+		if node.inLeft(target) {
+			nodeHash = node.left
+			neighborHash = node.right
 		} else {
-			hash = node.right
-			neighbor = node.left
+			nodeHash = node.right
+			neighborHash = node.left
 		}
+
 		// We are not yet at the leaf, so we descend the tree.
-		node, ok = t.treeNodes[hash]
+		node, ok = t.treeNodes[nodeHash]
 		if !ok {
-			return false, proof, fmt.Errorf("Patricia Node %x not found", hash)
+			return proof, fmt.Errorf("Patricia Node %x not found", nodeHash)
 		}
-		nodeNeighbor, ok = t.treeNodes[neighbor]
+		_, ok = t.treeNodes[neighborHash]
 		if !ok {
-			return false, proof, fmt.Errorf("Patricia Node %x not found", neigbor)
+			return proof, fmt.Errorf("Patricia Node %x not found", neighborHash)
 		}
-		proof[2*i + 1] = nodeNeighbor
+		neighborHashes = append(neighborHashes, neighborHash)
 	}
 }
 
@@ -324,6 +337,10 @@ func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash,
 		node = self.tree_nodes[&hash].clone();
 	} // End loop
 }
+
+// END OF OUR CODE //
+
+//BEGINNING OF UTREEXO CODE //
 
 // NewForest : use ram if not given a file
 func NewForest(forestFile *os.File, cached bool) *Forest {
