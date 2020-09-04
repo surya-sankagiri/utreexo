@@ -338,6 +338,42 @@ func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash,
 	} // End loop
 }
 
+// Delete the leaves at the dels location for the trie forest
+func (f *Forest) removev5(dels []uint64) error {
+
+	nextNumLeaves := f.numLeaves - uint64(len(dels))
+	// check that all dels are before the maxLeaf
+	for _, dpos := range dels {
+		if dpos > f.maxLeaf {
+			return fmt.Errorf(
+				"Trying to delete leaf at %d, beyond max %d", dpos, f.maxLeaf)
+		}
+
+		f.removeAt(dpos)
+	}
+
+	f.numLeaves = nextNumLeaves
+
+	return nil	
+}
+
+func (f *Forest) removeAt(dpos) {
+	// Descend forest to leaf
+	_, proof, err := f.particiaLookup.search_proof(hash, dpos) // TODO get hash
+	// Ascend the proof branch, rehashing
+	// TODO does proof need to be reversed?
+	replace := proof[0]
+
+	for i, node := range proof {
+		if i == 0 {
+			continue
+		}
+		
+		f.insert(newPatriciaNode(node.sibling, node.uncle))
+
+	}
+}
+
 // END OF OUR CODE //
 
 //BEGINNING OF UTREEXO CODE //
@@ -423,41 +459,7 @@ var empty [32]byte
 // 	return nil
 // }
 
-// Delete the leaves at the dels location for the trie forest
-func (f *Forest) removev5(dels []uint64) error {
 
-	nextNumLeaves := f.numLeaves - uint64(len(dels))
-	// check that all dels are before the maxLeaf
-	for _, dpos := range dels {
-		if dpos > f.maxLeaf {
-			return fmt.Errorf(
-				"Trying to delete leaf at %d, beyond max %d", dpos, f.maxLeaf)
-		}
-
-		f.removeAt(dpos)
-	}
-
-	f.numLeaves = nextNumLeaves
-
-	return nil	
-}
-
-func (f *Forest) removeAt(dpos) {
-	// Descend forest to leaf
-	_, proof, err := f.particiaLookup.search_proof(hash, dpos) // TODO get hash
-	// Ascend the proof branch, rehashing
-	// TODO does proof need to be reversed?
-	replace := proof[0]
-
-	for i, node := range proof {
-		if i == 0 {
-			continue
-		}
-		
-		f.insert(newPatriciaNode(node.sibling, node.uncle))
-
-	}
-}
 
 func updateDirt(hashDirt []uint64, swapRow []arrow, numLeaves uint64, rows uint8) (nextHashDirt []uint64) {
 	var prevHash uint64
