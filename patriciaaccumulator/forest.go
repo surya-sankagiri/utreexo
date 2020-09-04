@@ -125,10 +125,19 @@ func (p *PatriciaNode) max() uint64 {
 }
 
 func (p *PatriciaNode) inRange(v uint64) bool {
+	// If a leaf node, in range if equal to location
+	if p.left == p.right {
+		return v == p.midpoint
+	}
+	// Otherwise
 	return p.min() <= v && v < p.max()
 }
 
 func (p *PatriciaNode) inLeft(v uint64) bool {
+	// Should not be called for leaf node
+	if p.left == p.right {
+		panic()
+	}
 	return p.min() <= v && v < p.midpoint
 }
 
