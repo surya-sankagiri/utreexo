@@ -189,14 +189,15 @@ func (t *PatriciaLookup) merge(other *PatriciaLookup) {
 
 func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) PatriciaProof {
 	var proof PatriciaProof
-	proof.targets = []uint64{target}
+	midpoints = midpoints[:len(midpoints)-1]
 	//reverse the order of midpoints and neighborHashes so as to include trees first
 	for i, j := 0, len(midpoints)-1; i < j; i, j = i+1, j-1 {
 		midpoints[i], midpoints[j] = midpoints[j], midpoints[i]
-	}
-	for i, j := 0, len(neighborHashes)-1; i < j; i, j = i+1, j-1 {
 		neighborHashes[i], neighborHashes[j] = neighborHashes[j], neighborHashes[i]
 	}
+	proof.targets = []uint64{target}
+	proof.midpoints = midpoints
+	proof.hashes = neighborHashes
 	return proof
 }
 
