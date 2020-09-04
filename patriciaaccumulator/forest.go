@@ -277,23 +277,10 @@ func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash,
 	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
-	// create a new PN that stores the above AccountState exclusively and add it to tree_nodes
-	
-	p := new(PatriciaNode)
-	p.left = toAdd
-	p.right = toAdd
-	p.midpoint = location
-
-	t.treeNodes[p.hash()] = p
-
 	node, ok := t.treeNodes[stateRoot]
 	if !ok {
 		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
 	}
-	let mut node_to_add: PatriciaNode;
-	let mut hash: H256;
-	let mut neighbor: H256;
-	let mut sibling: PatriciaNode;
 
 	var hash Hash
 	var neighbor Node
