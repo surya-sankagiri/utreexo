@@ -322,7 +322,7 @@ func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash,
 	t.treeNodes[nodeToAdd.hash()] = nodeToAdd
 
 	// We travel up the branch, recombining nodes
-	for len(branch) > 0 {
+	for len(neighborBranch) > 0 {
 		// nodeToAdd must now replace the hash of the last node of mainBranch in the second-to-last node of mainBranch
 		neighborNode = neighborBranch.pop()
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
