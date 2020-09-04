@@ -39,7 +39,7 @@ There might be a better / optimal way to do this but it seems OK for now.
 // This tree would have a row of 2.
 type Forest struct {
 	numLeaves uint64 // number of leaves in the forest (bottom row)
-	maxLeaf uint64 // the index of the largest leaf that has ever existed in the trie
+	maxLeaf   uint64 // the index of the largest leaf that has ever existed in the trie
 	// I think this will be necessary in the add function
 	// TODO make sure maxLeaf is updated correctly
 	// rows in the forest. (forest height) NON INTUITIVE!
@@ -269,9 +269,8 @@ func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaP
 	}
 }
 
-//similar to add in forest.go
+// Adds a hash at a particular location and returns the new state root
 func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash, error) {
-	/// let state_root = state_root.root; Rust Code
 
 	// TODO: do not add anything until all errors have been ruled out
 	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
@@ -337,6 +336,78 @@ func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash,
 	return nodeToAdd.hash()
 }
 
+// Based on add above: this code removes a location and returns the new root
+func (t *PatriciaLookup) remove(stateRoot Hash, location uint64) Hash {
+
+	// TODO: should state root be a property of patriciaLookup, and we avoid a single lookup representing multiple roots?
+	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
+	// branch := t.RetrieveProof(toAdd, location)
+
+	node, ok := t.treeNodes[stateRoot]
+	if !ok {
+		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
+	}
+
+	var hash Hash
+	var neighbor Node
+	neighborBranch := new([]PatriciaNode, 0, 64)
+	mainBranch := new([]PatriciaNode, 0, 64)
+
+	// We descend the tree until we find a leaf node
+	// This node should be the sibling of the new leaf
+	for node.left != node.right {
+		// mainBranch will consist of all the nodes to be deleted, from the root to the removed leaf
+		mainBranch = append(mainBranch, node)
+
+		// Determine if we descend left or right
+		if node.inLeft(location) {
+			neighbor = t.treeNodes[node.right]
+			hash = node.left
+		} else {
+			neighbor = t.treeNodes[node.left]
+			hash = node.right
+		}
+		// Add the other direction node to the branch
+		neighborBranch = append(neighborBranch, neighbor)
+		// Update node down the tree
+		node = t.treeNodes[hash]
+
+	} // End loop
+	append(mainBranch, node)
+
+	// Check that the leaf node we found has the right location
+	if node.location != location {
+		panic("Found wrong location in remove")
+	}
+
+	// Delete all nodes in the main branch, they are to be replaced
+	for _, node := range mainBranch {
+		delete(t.treeNodes, node.hash())
+	}
+
+	// If there is one element in the neighbor nodes, the leaf we deleted was a child of the root
+	// The neighbor becomes the new root.
+	if len(neighborBranch) == 1 {
+		return neighborBranch[0].hash()
+	}
+
+	// Otherwise, the lowest new node is the combination of the sibling and uncle of the deleted leaf
+	// That is, the last two nodes in the neighborBranch
+	nodeToAdd = newPatriciaNode(neighborBranch.pop(), neighborBranch.pop())
+	t.treeNodes[nodeToAdd.hash()] = nodeToAdd
+
+	// We travel up the branch, recombining nodes
+	for len(neighborBranch) > 0 {
+		// nodeToAdd must now replace the hash of the last node of mainBranch in the second-to-last node of mainBranch
+		neighborNode = neighborBranch.pop()
+		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
+		t.treeNodes[nodeToAdd.hash()] = nodeToAdd
+	}
+
+	// The new state root is the hash of the last node added
+	return nodeToAdd.hash()
+}
+
 // Delete the leaves at the dels location for the trie forest
 func (f *Forest) removev5(dels []uint64) error {
 
@@ -348,29 +419,12 @@ func (f *Forest) removev5(dels []uint64) error {
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.maxLeaf)
 		}
 
-		f.removeAt(dpos)
+		f.particiaLookup.removeAt(dpos)
 	}
 
 	f.numLeaves = nextNumLeaves
 
-	return nil	
-}
-
-func (f *Forest) removeAt(dpos) {
-	// Descend forest to leaf
-	_, proof, err := f.particiaLookup.search_proof(hash, dpos) // TODO get hash
-	// Ascend the proof branch, rehashing
-	// TODO does proof need to be reversed?
-	replace := proof[0]
-
-	for i, node := range proof {
-		if i == 0 {
-			continue
-		}
-		
-		f.insert(newPatriciaNode(node.sibling, node.uncle))
-
-	}
+	return nil
 }
 
 // END OF OUR CODE //
@@ -457,8 +511,6 @@ var empty [32]byte
 
 // 	return nil
 // }
-
-
 
 func updateDirt(hashDirt []uint64, swapRow []arrow, numLeaves uint64, rows uint8) (nextHashDirt []uint64) {
 	var prevHash uint64
