@@ -153,6 +153,9 @@ func (p *PatriciaNode) hash() Hash {
 }
 
 func newPatriciaNode(child1, child2 *PatriciaNode) *PatriciaNode {
+	// TODO: I think this should not deal with pointers
+
+	// TODO: DOes this work correctly when one of the children is a leaf?
 
 	p := new(PatriciaNode)
 
