@@ -226,10 +226,13 @@ func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaP
 		if node.left == node.right {
 			// REMARK (SURYA): We do not check whether the hash corresponds to the hash of a leaf
 			//perform a sanity check here
-			if len(midpoints) != len(neighborHashes) {
+			if len(midpoints) != len(neighborHashes) + 1 {
 				return proof, fmt.Errorf("# midpoints %d, #hashes %d", len(midpoints), len(neighborHashes))
 			}
-			proof = ConstructProof(target, midpoints, neighborHashes) // TODO: code this function
+			if node.midpoint != target {
+				return proof, fmt.Error("midpoint of leaf %d not equal to target %d%", node.midpoint, target)
+			}
+			proof = ConstructProof(target, midpoints, neighborHashes) 
 			return proof, nil
 		}
 		if node.inLeft(target) {
