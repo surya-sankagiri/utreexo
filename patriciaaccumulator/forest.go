@@ -274,7 +274,9 @@ func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash,
 	/// let state_root = state_root.root; Rust Code
 
 	// TODO: do not add anything until all errors have been ruled out
-	var branch []PatriciaNode
+	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
+	// branch := t.RetrieveProof(toAdd, location)
+
 	// create a new PN that stores the above AccountState exclusively and add it to tree_nodes
 	
 	p := new(PatriciaNode)
