@@ -376,34 +376,70 @@ var empty [32]byte
 //
 
 // rnew -- emove v4 with swapHashRange
-func (f *Forest) removev4(dels []uint64) error {
+// func (f *Forest) removev4(dels []uint64) error {
+// 	nextNumLeaves := f.numLeaves - uint64(len(dels))
+// 	// check that all dels are there
+// 	for _, dpos := range dels {
+// 		if dpos > f.numLeaves {
+// 			return fmt.Errorf(
+// 				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
+// 		}
+// 	}
+// 	var hashDirt []uint64
+// 	swapRows := remTrans2(dels, f.numLeaves, f.rows)
+// 	// loop taken from pollard rem2.  maybe pollard and forest can both
+// 	// satisfy the same interface..?  maybe?  that could work...
+// 	// TODO try that ^^^^^^
+// 	for r := uint8(0); r < f.rows; r++ {
+// 		hashDirt = updateDirt(hashDirt, swapRows[r], f.numLeaves, f.rows)
+// 		for _, swap := range swapRows[r] {
+// 			f.swapNodes(swap, r)
+// 		}
+// 		// do all the hashes at once at the end
+// 		err := f.hashRow(hashDirt)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+// 	f.numLeaves = nextNumLeaves
+
+// 	return nil
+// }
+
+// Delete the leaves at the dels location for the trie forest
+func (f *Forest) removev5(dels []uint64) error {
+
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
-	// check that all dels are there
+	// check that all dels are before the maxLeaf
 	for _, dpos := range dels {
-		if dpos > f.numLeaves {
+		if dpos > f.maxLeaf {
 			return fmt.Errorf(
-				"Trying to delete leaf at %d, beyond max %d", dpos, f.numLeaves)
+				"Trying to delete leaf at %d, beyond max %d", dpos, f.maxLeaf)
 		}
+
+		f.removeAt(dpos)
 	}
-	var hashDirt []uint64
-	swapRows := remTrans2(dels, f.numLeaves, f.rows)
-	// loop taken from pollard rem2.  maybe pollard and forest can both
-	// satisfy the same interface..?  maybe?  that could work...
-	// TODO try that ^^^^^^
-	for r := uint8(0); r < f.rows; r++ {
-		hashDirt = updateDirt(hashDirt, swapRows[r], f.numLeaves, f.rows)
-		for _, swap := range swapRows[r] {
-			f.swapNodes(swap, r)
-		}
-		// do all the hashes at once at the end
-		err := f.hashRow(hashDirt)
-		if err != nil {
-			return err
-		}
-	}
+
 	f.numLeaves = nextNumLeaves
 
-	return nil
+	return nil	
+}
+
+func (f *Forest) removeAt(dpos) {
+	// Descend forest to leaf
+	_, proof, err := f.particiaLookup.search_proof(hash, dpos) // TODO get hash
+	// Ascend the proof branch, rehashing
+	// TODO does proof need to be reversed?
+	replace := proof[0]
+
+	for i, node := range proof {
+		if i == 0 {
+			continue
+		}
+		
+		f.insert(newPatriciaNode(node.sibling, node.uncle))
+
+	}
 }
 
 func updateDirt(hashDirt []uint64, swapRow []arrow, numLeaves uint64, rows uint8) (nextHashDirt []uint64) {
