@@ -195,13 +195,9 @@ func (t *PatriciaLookup) merge(other *PatriciaLookup) {
 	}
 }
 
-// similar to Prove in forestproofs.go?
-// adapted from PatricialookupHelper in Rust code
-// TODO: return the proof as a PatriciaProof (see batchproof.go) (working on it)
-
 func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) PatriciaProof {
 	var proof PatriciaProof
-	midpoints = midpoints[:len(midpoints)-1]
+	midpoints = midpoints[:len(midpoints)-1] // the last midpoint is the target
 	//reverse the order of midpoints and neighborHashes so as to include trees first
 	for i, j := 0, len(midpoints)-1; i < j; i, j = i+1, j-1 {
 		midpoints[i], midpoints[j] = midpoints[j], midpoints[i]
@@ -272,7 +268,6 @@ func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaP
 // Adds a hash at a particular location and returns the new state root
 func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash, error) {
 
-	// TODO: do not add anything until all errors have been ruled out
 	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
