@@ -265,6 +265,24 @@ func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaP
 	}
 }
 
+// RetrieveBatchProof creates a proof for a batch of targets against a state root
+// The proof consists of:
+//   The targets we are proving for (in left to right order)
+// 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
+//   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
+func (t *PatriciaLookup) RetrieveBatchProof(stateRoot Hash, targets []uint64) (PatriciaProof, error) {
+
+	// A slice of proofs of individual elements
+	individualProofs := make([]PatriciaProof, 0, 100)
+
+	for _, target := range targets {
+		individualProofs = append(individualProofs, t.RetrieveProof(stateRoot, target))
+	}
+
+	// TODO
+
+}
+
 // Adds a hash at a particular location and returns the new state root
 func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash, error) {
 
