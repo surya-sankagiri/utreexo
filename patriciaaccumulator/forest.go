@@ -105,6 +105,7 @@ type Forest struct {
 }
 
 type PatriciaLookup struct {
+	stateRoot Hash
 	treeNodes map[Hash]PatriciaNode
 }
 
@@ -214,9 +215,10 @@ func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) Pa
 //   The target we are proving for
 // 	 all midpoints on the main branch from the root to (Just before?) the proved leaf
 //   all hashes of nodes that are neighbors of nodes on the main branch, in order
-func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaProof, error) {
+func (t *PatriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	// TODO consider replacing the return proof, error with just returning a proof
 	// If an error happens, we should just quit immediately rather than handling it
+
 	var proof PatriciaProof
 	var node PatriciaNode
 	var nodeHash Hash
@@ -225,9 +227,9 @@ func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaP
 	var neighborHashes = make([]Hash, 0, 64)
 	var ok bool
 	// Start at the root of the tree
-	node, ok = t.treeNodes[stateRoot]
+	node, ok = t.treeNodes[t.stateRoot]
 	if !ok {
-		return proof, fmt.Errorf("state root %x not found", stateRoot)
+		return proof, fmt.Errorf("state root %x not found", t.stateRoot)
 	}
 	// Discover the path to the leaf
 	for {
@@ -278,13 +280,13 @@ func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaP
 //   The targets we are proving for (in left to right order)
 // 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
 //   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
-func (t *PatriciaLookup) RetrieveBatchProof(stateRoot Hash, targets []uint64) (PatriciaProof, error) {
+func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) (PatriciaProof, error) {
 
 	// A slice of proofs of individual elements
 	individualProofs := make([]PatriciaProof, 0, 100)
 
-	for _, target := range targets {
-		individualProofs = append(individualProofs, t.RetrieveProof(stateRoot, target))
+	for _, target := range sort(targets) {
+		individualProofs = append(individualProofs, t.RetrieveProof(target))
 	}
 
 	// TODO
@@ -292,14 +294,14 @@ func (t *PatriciaLookup) RetrieveBatchProof(stateRoot Hash, targets []uint64) (P
 }
 
 // Adds a hash at a particular location and returns the new state root
-func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash, error) {
+func (t *PatriciaLookup) add(location uint64, toAdd Hash) error {
 
 	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
-	node, ok := t.treeNodes[stateRoot]
+	node, ok := t.treeNodes[t.stateRoot]
 	if !ok {
-		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
+		return false, proof, fmt.Errorf("state root %x not found", t.stateRoot)
 	}
 
 	var hash Hash
@@ -354,18 +356,21 @@ func (t *PatriciaLookup) add(stateRoot Hash, location uint64, toAdd Hash) (Hash,
 	}
 
 	// The new state root is the hash of the last node added
-	return nodeToAdd.hash()
+	t.stateRoot = nodeToAdd.hash()
+
+	return nil
 }
 
 // Based on add above: this code removes a location and returns the new root
-func (t *PatriciaLookup) remove(stateRoot Hash, location uint64) Hash {
+func (t *PatriciaLookup) remove(location uint64) {
 
 	// TODO: should state root be a property of patriciaLookup, and we avoid a single lookup representing multiple roots?
 	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
-	node, ok := t.treeNodes[stateRoot]
+	node, ok := t.treeNodes[t.stateRoot]
 	if !ok {
+		panic()
 		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
 	}
 
@@ -426,7 +431,7 @@ func (t *PatriciaLookup) remove(stateRoot Hash, location uint64) Hash {
 	}
 
 	// The new state root is the hash of the last node added
-	return nodeToAdd.hash()
+	t.stateRoot = nodeToAdd.hash()
 }
 
 // Delete the leaves at the dels location for the trie forest
