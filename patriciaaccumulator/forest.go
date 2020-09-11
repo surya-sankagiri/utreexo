@@ -209,7 +209,14 @@ func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) Pa
 	return proof
 }
 
+// RetrieveProof Creates a proof for a single target against a state root
+// The proof consists of:
+//   The target we are proving for
+// 	 all midpoints on the main branch from the root to (Just before?) the proved leaf
+//   all hashes of nodes that are neighbors of nodes on the main branch, in order
 func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaProof, error) {
+	// TODO consider replacing the return proof, error with just returning a proof
+	// If an error happens, we should just quit immediately rather than handling it
 	var proof PatriciaProof
 	var node PatriciaNode
 	var nodeHash Hash
@@ -232,6 +239,7 @@ func (t *PatriciaLookup) RetrieveProof(stateRoot Hash, target uint64) (PatriciaP
 		}
 
 		// If the min is the max, we are at a leaf
+		// TODO do we want to include the midpoint of the leaf node?
 		if node.left == node.right {
 			// REMARK (SURYA): We do not check whether the hash corresponds to the hash of a leaf
 			//perform a sanity check here
