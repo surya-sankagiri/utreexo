@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/BoltonBailey/utreexo/accumulator"
+	"github.com/BoltonBailey/utreexo/patriciaaccumulator"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -42,8 +43,14 @@ type UBlock struct {
 	Height    int32
 }
 
+// type UData struct {
+// 	AccProof accumulator.BatchProof
+// 	UtxoData []LeafData
+// 	LeafTTLs []uint32
+// }
+
 type UData struct {
-	AccProof accumulator.BatchProof
+	AccProof []patriciaaccumulator.PatriciaProof
 	UtxoData []LeafData
 	LeafTTLs []uint32
 }
