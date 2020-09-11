@@ -14,6 +14,9 @@ import (
 // 	// the position of the hashes is implied / computable from the leaf positions
 // }
 
+// TODO it is actually possible to avoid including a prefix in every node of a proof and instead only hash in the prefix lengths
+// This makesthe system more space-efficient. See https://ethresear.ch/t/binary-trie-format/7621/6
+
 // PatriciaProof is a potential replacement structure for BatchProof in the PatriciaAccumulator Implementation - Bolton
 type PatriciaProof struct {
 	targets   []uint64
