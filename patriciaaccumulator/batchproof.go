@@ -17,9 +17,21 @@ import (
 // TODO it is actually possible to avoid including a prefix in every node of a proof and instead only hash in the prefix lengths
 // This makesthe system more space-efficient. See https://ethresear.ch/t/binary-trie-format/7621/6
 
-// PatriciaProof is a potential replacement structure for BatchProof in the PatriciaAccumulator Implementation - Bolton
-type PatriciaProof struct {
+// BatchPatriciaProof is a potential replacement structure for BatchProof in the PatriciaAccumulator Implementation - Bolton
+type BatchPatriciaProof struct {
 	targets   []uint64
+	hashes    []Hash   // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
+	midpoints []uint64 // List of equal midpoints of nodes that are ancestors of deleted elements
+	// Checking a proof requires all midpoints in the branch to the element, and all hashes of siblings
+	// We therefore have the midpoint tree. Our first step in proof checking is constructing this tree
+	// We then have to fill in the hashes of the children we proceed in order left to right
+	// 1. when a hash is a leaf, we have that hash
+	// 2. when we don't have a leaf, we take the next element of hashes, and we order hashes so that this element is the correct next one.
+}
+
+// PatriciaProof is a potential replacement structure for a single proof
+type PatriciaProof struct {
+	target    uint64
 	hashes    []Hash   // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
 	midpoints []uint64 // List of equal midpoints of nodes that are ancestors of deleted elements
 	// Checking a proof requires all midpoints in the branch to the element, and all hashes of siblings
