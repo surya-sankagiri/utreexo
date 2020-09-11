@@ -280,14 +280,16 @@ func (t *PatriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 //   The targets we are proving for (in left to right order)
 // 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
 //   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
-func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) (PatriciaProof, error) {
+func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) ([]PatriciaProof, error) {
 
 	// A slice of proofs of individual elements
-	individualProofs := make([]PatriciaProof, 0, 100)
+	individualProofs := make([]PatriciaProof, 0, 3000)
 
 	for _, target := range sort(targets) {
 		individualProofs = append(individualProofs, t.RetrieveProof(target))
 	}
+
+	return individualProofs
 
 	// TODO
 
