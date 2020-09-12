@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"sort"
 )
-
+// OLD CODE: 
 // // BatchProof :
 // type BatchProof struct {
 // 	Targets []uint64
@@ -40,6 +41,70 @@ type PatriciaProof struct {
 	// 1. when a hash is a leaf, we have that hash
 	// 2. when we don't have a leaf, we take the next element of hashes, and we order hashes so that this element is the correct next one.
 }
+
+// MergeProofs takes as inputs a slice of PatriciaProofs and gives as output a single BatchPatriciaProof-Surya
+// TODO: Debug this function
+// TODO: make the running time of the code more efficient, if possible -Surya
+// TODO: make the BatchPatriciaProof struct more efficient by removing repeated entries -Surya
+func MergeProofs(indProofs []PatriciaProof) BatchPatriciaProof {
+	var batchProof BatchPatriciaProof
+	targets := []float64{}
+	for _, proof := range indproofs {
+		targets = append(targets, proof.target)
+	}
+	sortedIndices := ArgsortNew(targets)
+	for _, i := range sortedIndices {
+		batchProof.targets = append(batchProof.targets, indProofs[i].target)
+		batchProof.midpoints = append(batchProof.midpoints, indProofs[i].midpoints...)
+		batchProof.hashes = append(batchProof.hashes, indProofs[i].hashes...)
+	}
+	return batchProof
+}
+
+// Code for implementing ArgSort, lifted from the internet--Surya
+// --------------------------------------------------------
+// argsort, like in Numpy, it returns an array of indexes into an array. Note
+// that the gonum version of argsort reorders the original array and returns
+// indexes to reconstruct the original order.
+type argsort struct {
+	s    []float64 // Points to orignal array but does NOT alter it.
+	inds []int     // Indexes to be returned.
+}
+
+func (a argsort) Len() int {
+	return len(a.s)
+}
+
+func (a argsort) Less(i, j int) bool {
+	return a.s[a.inds[i]] < a.s[a.inds[j]]
+}
+
+func (a argsort) Swap(i, j int) {
+	a.inds[i], a.inds[j] = a.inds[j], a.inds[i]
+}
+
+// ArgsortNew allocates and returns an array of indexes into the source float
+// array.
+func ArgsortNew(src []float64) []int {
+	inds := make([]int, len(src))
+	for i := range src {
+		inds[i] = i
+	}
+	Argsort(src, inds)
+	return inds
+}
+
+// Argsort alters a caller-allocated array of indexes into the source float
+// array. The indexes must already have values 0...n-1.
+func Argsort(src []float64, inds []int) {
+	if len(src) != len(inds) {
+		panic("floats: length of inds does not match length of slice")
+	}
+	a := argsort{s: src, inds: inds}
+	sort.Sort(a)
+}
+// -------------------------------------
+
 
 // ToBytes give the bytes for a BatchProof.  It errors out silently because
 // I don't think the binary.Write errors ever actually happen
