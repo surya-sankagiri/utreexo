@@ -204,7 +204,7 @@ func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) Pa
 		midpoints[i], midpoints[j] = midpoints[j], midpoints[i]
 		neighborHashes[i], neighborHashes[j] = neighborHashes[j], neighborHashes[i]
 	}
-	proof.targets = []uint64{target}
+	proof.target = target
 	proof.midpoints = midpoints
 	proof.hashes = neighborHashes
 	return proof
