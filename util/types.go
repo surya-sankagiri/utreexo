@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/surya-sankagiri/utreexo/accumulator"
-	"github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/surya-sankagiri/utreexo/accumulator"
 )
 
 type Hash [32]byte
@@ -43,14 +42,8 @@ type UBlock struct {
 	Height    int32
 }
 
-// type UData struct {
-// 	AccProof accumulator.BatchProof
-// 	UtxoData []LeafData
-// 	LeafTTLs []uint32
-// }
-
 type UData struct {
-	AccProof []patriciaaccumulator.PatriciaProof
+	AccProof accumulator.BatchProof
 	UtxoData []LeafData
 	LeafTTLs []uint32
 }

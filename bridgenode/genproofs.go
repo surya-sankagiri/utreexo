@@ -11,6 +11,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/surya-sankagiri/utreexo/accumulator"
+	"github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 	"github.com/surya-sankagiri/utreexo/util"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -230,6 +231,36 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	// 	err = fmt.Errorf("height %d LeafData / Proof mismatch", height)
 	// 	return
 	// }
+	return
+}
+
+func genPatriciaUData(delLeaves []util.LeafData, f *patriciaaccumulator.Forest, height int32) (
+	ud patriciaaccumulator.PatriciaUData, err error) {
+
+	ud.UtxoData = delLeaves
+	// make slice of hashes from leafdata
+	delHashes := make([]accumulator.Hash, len(ud.UtxoData))
+	for i := range ud.UtxoData {
+		delHashes[i] = ud.UtxoData[i].LeafHash()
+		// fmt.Printf("del %s -> %x\n",
+		// ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
+	}
+	// generate block proof. Errors if the tx cannot be proven
+	// Should never error out with genproofs as it takes
+	// blk*.dat files which have already been vetted by Bitcoin Core
+	ud.AccProof, err = f.ProvePatriciaBatch(delHashes)
+	if err != nil {
+		err = fmt.Errorf("genUData failed at block %d %s %s",
+			height, f.Stats(), err.Error())
+		return
+	}
+
+	if len(ud.AccProof.Targets) != len(delLeaves) {
+		err = fmt.Errorf("genUData %d targets but %d leafData",
+			len(ud.AccProof.Targets), len(delLeaves))
+		return
+	}
+
 	return
 }
 

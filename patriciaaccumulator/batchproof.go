@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"sort"
 )
-// OLD CODE: 
+
+// OLD CODE:
 // // BatchProof :
 // type BatchProof struct {
 // 	Targets []uint64
@@ -49,7 +50,7 @@ type PatriciaProof struct {
 func MergeProofs(indProofs []PatriciaProof) BatchPatriciaProof {
 	var batchProof BatchPatriciaProof
 	targets := []float64{}
-	for _, proof := range indproofs {
+	for _, proof := range indProofs {
 		targets = append(targets, proof.target)
 	}
 	sortedIndices := ArgsortNew(targets)
@@ -103,6 +104,7 @@ func Argsort(src []float64, inds []int) {
 	a := argsort{s: src, inds: inds}
 	sort.Sort(a)
 }
+
 // -------------------------------------
 
 // there seems to be two syntaxes for write; need to figure that out-Surya
@@ -143,7 +145,7 @@ func (bp *BatchPatriciaProof) ToBytes() []byte {
 			panic("error in converting batchproof to bytes.")
 		}
 	}
-	
+
 	// then the rest is just hashes
 	for _, h := range bp.hashes {
 		_, err = buf.Write(h[:])

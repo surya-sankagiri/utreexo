@@ -1,3 +1,5 @@
+github.com/BoltonBailey/utreexo v0.0.0-20200829210935-77c8a8438003 h1:KaPW0g+hcAHG9OOIax1gjbj8ZV5BH5GaI37/1caueQA=
+github.com/BoltonBailey/utreexo v0.0.0-20200829210935-77c8a8438003/go.mod h1:Au0fFGqgUf3fqOTL+bGDQgjM9bB3PC91SvT5Y4GSrvM=
 github.com/adiabat/bech32 v0.0.0-20170505011816-6289d404861d h1:7uzrpmQFgin7GpzfZOqRLNBJB2c2Sjb0TFOJajaPbgw=
 github.com/adiabat/bech32 v0.0.0-20170505011816-6289d404861d/go.mod h1:NW+G+E7qQb191ngeVCFjpvrWHIYANKkWJYxekITaulc=
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=

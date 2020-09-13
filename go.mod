@@ -3,6 +3,7 @@ module github.com/surya-sankagiri/utreexo
 go 1.12
 
 require (
+	github.com/BoltonBailey/utreexo v0.0.0-20200829210935-77c8a8438003 // indirect
 	github.com/adiabat/bech32 v0.0.0-20170505011816-6289d404861d
 	github.com/btcsuite/btcd v0.20.1-beta
 	github.com/btcsuite/btcutil v1.0.2
