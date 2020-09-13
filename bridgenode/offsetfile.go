@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/BoltonBailey/utreexo/util"
+	"github.com/surya-sankagiri/utreexo/util"
 )
 
 // buildOffsetFile builds an offsetFile which acts as an index

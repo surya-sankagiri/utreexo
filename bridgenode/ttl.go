@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/BoltonBailey/utreexo/util"
+	"github.com/surya-sankagiri/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 

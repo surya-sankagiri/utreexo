@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/BoltonBailey/utreexo/accumulator"
-	"github.com/BoltonBailey/utreexo/util"
+	"github.com/surya-sankagiri/utreexo/accumulator"
+	"github.com/surya-sankagiri/utreexo/util"
 )
 
 // restorePollard restores the pollard from disk to memory.

@@ -1,4 +1,4 @@
-module github.com/BoltonBailey/utreexo
+module github.com/surya-sankagiri/utreexo
 
 go 1.12
 

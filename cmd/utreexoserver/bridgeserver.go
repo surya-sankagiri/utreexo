@@ -12,8 +12,8 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg"
 
-	bridge "github.com/BoltonBailey/utreexo/bridgenode"
-	"github.com/BoltonBailey/utreexo/util"
+	bridge "github.com/surya-sankagiri/utreexo/bridgenode"
+	"github.com/surya-sankagiri/utreexo/util"
 )
 
 var msg = `

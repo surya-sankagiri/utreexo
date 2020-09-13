@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/BoltonBailey/utreexo/accumulator"
-	"github.com/BoltonBailey/utreexo/patriciaaccumulator"
+	"github.com/surya-sankagiri/utreexo/accumulator"
+	"github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 	"github.com/btcsuite/btcd/wire"
 )
 

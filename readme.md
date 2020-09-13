@@ -13,14 +13,14 @@ Logs for freenode are [here](http://gnusha.org/utreexo/)
 
 Here's how to get utreexo running to test out what it can do.  This currently is testing/research level code and should not be expected to be stable or secure.  But it also should work, and if it doesn't please report bugs!
 
-To demonstrate utreexo we went with a client-server model. We have made prebuild binaries to run utreexo on Linux, Mac and Windows available here: https://github.com/BoltonBailey/utreexo/releases but you can also build from source.
+To demonstrate utreexo we went with a client-server model. We have made prebuild binaries to run utreexo on Linux, Mac and Windows available here: https://github.com/surya-sankagiri/utreexo/releases but you can also build from source.
 
 ### Client
 
 #### Build from source
 ```
-$ go get github.com/BoltonBailey/utreexo
-$ cd ~/go/src/github.com/BoltonBailey/utreexo/cmd/utreexoclient
+$ go get github.com/surya-sankagiri/utreexo
+$ cd ~/go/src/github.com/surya-sankagiri/utreexo/cmd/utreexoclient
 $ go build
 ```
 
@@ -42,8 +42,8 @@ To try utreexo you do not need to run a server as we have a server set up for te
 
 #### Build from source
 ```
-$ go get github.com/BoltonBailey/utreexo
-$ cd ~/go/src/github.com/BoltonBailey/utreexo/cmd/utreexoserver
+$ go get github.com/surya-sankagiri/utreexo
+$ cd ~/go/src/github.com/surya-sankagiri/utreexo/cmd/utreexoserver
 $ go build
 ```
 
@@ -89,7 +89,7 @@ Install Go in your pc and get it working on your compiler/IDE. The guide below w
 </li>
 <li>
 
-Get the Utreexo Code from ```github.com/BoltonBailey/utreexo```
+Get the Utreexo Code from ```github.com/surya-sankagiri/utreexo```
 </li>
 <li>
 

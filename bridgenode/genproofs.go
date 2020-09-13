@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BoltonBailey/utreexo/accumulator"
-	"github.com/BoltonBailey/utreexo/util"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/surya-sankagiri/utreexo/accumulator"
+	"github.com/surya-sankagiri/utreexo/util"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"

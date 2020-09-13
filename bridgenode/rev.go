@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/BoltonBailey/utreexo/util"
+	"github.com/surya-sankagiri/utreexo/util"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	dbutil "github.com/syndtr/goleveldb/leveldb/util"

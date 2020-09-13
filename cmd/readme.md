@@ -24,7 +24,7 @@ The bridge node currently does not:
 3. Verify signatures
 
 The general idea for a bridge node is outlined in Section 4.5 in the Utreexo paper.
-https://github.com/BoltonBailey/utreexo/blob/master/utreexo.pdf
+https://github.com/surya-sankagiri/utreexo/blob/master/utreexo.pdf
 
 ## ttl
 
@@ -35,7 +35,7 @@ For example, a transaction that is created in block #200 and spent at block #400
 a ttl value of 200.
 
 This is needed for caching outlined in Section 5.3 and 5.4 in the Utreexo paper.
-https://github.com/BoltonBailey/utreexo/blob/master/utreexo.pdf
+https://github.com/surya-sankagiri/utreexo/blob/master/utreexo.pdf
 
 ## util
 

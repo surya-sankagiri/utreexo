@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/BoltonBailey/utreexo/accumulator"
-	"github.com/BoltonBailey/utreexo/util"
+	"github.com/surya-sankagiri/utreexo/accumulator"
+	"github.com/surya-sankagiri/utreexo/util"
 )
 
 // initBridgeNodeState attempts to load and initialize the chain state from the disk.
