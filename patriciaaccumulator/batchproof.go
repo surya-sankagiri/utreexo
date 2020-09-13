@@ -105,8 +105,7 @@ func Argsort(src []float64, inds []int) {
 }
 // -------------------------------------
 
-// TODO: write a similar function for BatchPatriciaProof-Surya
-// there seems to be two syntaxes for write-Surya
+// there seems to be two syntaxes for write; need to figure that out-Surya
 // The trick is to write both the number of targets and the number of midpoints
 
 func (bp *BatchPatriciaProof) ToBytes() []byte {
@@ -191,7 +190,7 @@ func (bp *BatchPatriciaProof) ToBytes() []byte {
 // 	return buf.Bytes()
 // }
 
-
+// TODO: understand the two functions below and if necessary, write the same for BatchPatriciaProof
 // ToString for debugging, shows the blockproof
 func (bp *BatchProof) SortTargets() {
 	sortUint64s(bp.Targets)
@@ -211,17 +210,16 @@ func (bp *BatchProof) ToString() string {
 	return s
 }
 
-// FromBytesBatchProof gives a block proof back from the serialized bytes
-func FromBytesBatchProof(b []byte) (BatchProof, error) {
-	var bp BatchProof
+func FromBytesBatchProof(b []byte) (BatchPatriciaProof, error) {
+	var bp BatchPatriciaProof
 
 	// if empty slice, return empty BatchProof with 0 targets
 	if len(b) == 0 {
 		return bp, nil
 	}
-	// otherwise, if there are less than 4 bytes we can't even see the number
-	// of targets so something is wrong
-	if len(b) < 4 {
+	// otherwise, if there are less than 8 bytes we can't even see the number
+	// of targets and number of midpoints so something is wrong
+	if len(b) < 8 {
 		return bp, fmt.Errorf("batchproof only %d bytes", len(b))
 	}
 
@@ -232,25 +230,83 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 	if err != nil {
 		return bp, err
 	}
-	bp.Targets = make([]uint64, numTargets)
-	for i, _ := range bp.Targets {
-		err := binary.Read(buf, binary.BigEndian, &bp.Targets[i])
+
+	// read 4 byte number of midpoints
+	var numMidpoints uint32
+	err := binary.Read(buf, binary.BigEndian, &numMidpoints)
+	if err != nil {
+		return bp, err
+	}
+	//read the targets
+	bp.targets = make([]uint64, numTargets)
+	for i, _ := range bp.targets {
+		err := binary.Read(buf, binary.BigEndian, &bp.targets[i])
 		if err != nil {
 			return bp, err
 		}
 	}
+	//read the midpoints
+	bp.midpoints = make([]uint64, numMidpoints)
+	for i, _ = range bp.midpoints {
+		err := binary.Read(buf, binary.BigEndian, &bp.midpoints[i])
+		if err != nil {
+			return bp, err
+		}
+	}
+
 	remaining := buf.Len()
 	// the rest is hashes
 	if remaining%32 != 0 {
 		return bp, fmt.Errorf("%d bytes left, should be n*32", buf.Len())
 	}
-	bp.Proof = make([]Hash, remaining/32)
+	bp.hashes = make([]Hash, remaining/32)
 
-	for i, _ := range bp.Proof {
+	for i, _ := range bp.hashes {
 		copy(bp.Proof[i][:], buf.Next(32))
 	}
 	return bp, nil
 }
+
+// // FromBytesBatchProof gives a block proof back from the serialized bytes
+// func FromBytesBatchProof(b []byte) (BatchProof, error) {
+// 	var bp BatchProof
+
+// 	// if empty slice, return empty BatchProof with 0 targets
+// 	if len(b) == 0 {
+// 		return bp, nil
+// 	}
+// 	// otherwise, if there are less than 4 bytes we can't even see the number
+// 	// of targets so something is wrong
+// 	if len(b) < 4 {
+// 		return bp, fmt.Errorf("batchproof only %d bytes", len(b))
+// 	}
+
+// 	buf := bytes.NewBuffer(b)
+// 	// read 4 byte number of targets
+// 	var numTargets uint32
+// 	err := binary.Read(buf, binary.BigEndian, &numTargets)
+// 	if err != nil {
+// 		return bp, err
+// 	}
+// 	bp.Targets = make([]uint64, numTargets)
+// 	for i, _ := range bp.Targets {
+// 		err := binary.Read(buf, binary.BigEndian, &bp.Targets[i])
+// 		if err != nil {
+// 			return bp, err
+// 		}
+// 	}
+// 	remaining := buf.Len()
+// 	// the rest is hashes
+// 	if remaining%32 != 0 {
+// 		return bp, fmt.Errorf("%d bytes left, should be n*32", buf.Len())
+// 	}
+// 	bp.Proof = make([]Hash, remaining/32)
+
+// 	for i, _ := range bp.Proof {
+// 		copy(bp.Proof[i][:], buf.Next(32))
+// 	}
+// 	return bp, nil
+// }
 
 // TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
 // roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
