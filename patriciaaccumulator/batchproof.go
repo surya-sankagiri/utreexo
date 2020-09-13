@@ -105,41 +105,92 @@ func Argsort(src []float64, inds []int) {
 }
 // -------------------------------------
 
+// TODO: write a similar function for BatchPatriciaProof-Surya
+// there seems to be two syntaxes for write-Surya
+// The trick is to write both the number of targets and the number of midpoints
 
-// ToBytes give the bytes for a BatchProof.  It errors out silently because
-// I don't think the binary.Write errors ever actually happen
-func (bp *BatchProof) ToBytes() []byte {
+func (bp *BatchPatriciaProof) ToBytes() []byte {
 	var buf bytes.Buffer
 
 	// first write the number of targets (4 byte uint32)
-	numTargets := uint32(len(bp.Targets))
+	numTargets := uint32(len(bp.targets))
 	if numTargets == 0 {
 		return nil
 	}
 	err := binary.Write(&buf, binary.BigEndian, numTargets)
 	if err != nil {
-		fmt.Printf("huh %s\n", err.Error())
-		return nil
+		panic("error in converting batchproof to bytes.")
 	}
-	for _, t := range bp.Targets {
-		// there's no need for these to be 64 bit for the next few decades...
+	// then write the number of midpoints (4 byte uint32)
+	numMidpoints := uint32(len(bp.midpoints))
+	if numMidpoints == 0 {
+		panic("non-zero targets but no midpoints.")
+	}
+	err = binary.Write(&buf, binary.BigEndian, numMidpoints)
+	if err != nil {
+		panic("error in converting batchproof to bytes.")
+	}
+	// next, actually write the targets
+	for _, t := range bp.targets {
 		err := binary.Write(&buf, binary.BigEndian, t)
 		if err != nil {
-			fmt.Printf("huh %s\n", err.Error())
-			return nil
+			panic("error in converting batchproof to bytes.")
 		}
 	}
+	// this is followed by the midpoints
+	for _, m := range bp.midpoints {
+		err := binary.Write(&buf, binary.BigEndian, m)
+		if err != nil {
+			panic("error in converting batchproof to bytes.")
+		}
+	}
+	
 	// then the rest is just hashes
-	for _, h := range bp.Proof {
+	for _, h := range bp.hashes {
 		_, err = buf.Write(h[:])
 		if err != nil {
-			fmt.Printf("huh %s\n", err.Error())
-			return nil
+			panic("error in converting batchproof to bytes.")
 		}
 	}
-
 	return buf.Bytes()
 }
+
+// // ToBytes give the bytes for a BatchProof.  It errors out silently because
+// // I don't think the binary.Write errors ever actually happen
+
+// func (bp *BatchProof) ToBytes() []byte {
+// 	var buf bytes.Buffer
+
+// 	// first write the number of targets (4 byte uint32)
+// 	numTargets := uint32(len(bp.Targets))
+// 	if numTargets == 0 {
+// 		return nil
+// 	}
+// 	err := binary.Write(&buf, binary.BigEndian, numTargets)
+// 	if err != nil {
+// 		fmt.Printf("huh %s\n", err.Error())
+// 		return nil
+// 	}
+// 	for _, t := range bp.Targets {
+// 		// there's no need for these to be 64 bit for the next few decades...
+// 		err := binary.Write(&buf, binary.BigEndian, t)
+// 		if err != nil {
+// 			fmt.Printf("huh %s\n", err.Error())
+// 			return nil
+// 		}
+// 	}
+// 	// then the rest is just hashes
+// 	for _, h := range bp.Proof {
+// 		_, err = buf.Write(h[:])
+// 		if err != nil {
+// 			fmt.Printf("huh %s\n", err.Error())
+// 			return nil
+// 		}
+// 	}
+
+// 	return buf.Bytes()
+// }
+
 
 // ToString for debugging, shows the blockproof
 func (bp *BatchProof) SortTargets() {
