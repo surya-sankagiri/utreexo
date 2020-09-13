@@ -233,7 +233,7 @@ func FromBytesBatchProof(b []byte) (BatchPatriciaProof, error) {
 
 	// read 4 byte number of midpoints
 	var numMidpoints uint32
-	err := binary.Read(buf, binary.BigEndian, &numMidpoints)
+	err = binary.Read(buf, binary.BigEndian, &numMidpoints)
 	if err != nil {
 		return bp, err
 	}
@@ -262,7 +262,7 @@ func FromBytesBatchProof(b []byte) (BatchPatriciaProof, error) {
 	bp.hashes = make([]Hash, remaining/32)
 
 	for i, _ := range bp.hashes {
-		copy(bp.Proof[i][:], buf.Next(32))
+		copy(bp.hashes[i][:], buf.Next(32))
 	}
 	return bp, nil
 }
