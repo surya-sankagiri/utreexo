@@ -104,9 +104,12 @@ type Forest struct {
 	TimeInVerify time.Duration
 }
 
+// TODO: It seems capitalized stracts are exported. Should this be the case for the structs we define?
+
 type PatriciaLookup struct {
 	stateRoot Hash
 	treeNodes map[Hash]PatriciaNode
+	// TODO add a leaf node to location map?
 }
 
 type PatriciaNode struct {
