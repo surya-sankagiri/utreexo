@@ -104,7 +104,7 @@ type Forest struct {
 	TimeInVerify time.Duration
 }
 
-// TODO: It seems capitalized stracts are exported. Should this be the case for the structs we define?
+// TODO: It seems capitalized structs are exported. Should this be the case for the structs we define?
 
 type PatriciaLookup struct {
 	stateRoot Hash
@@ -296,6 +296,89 @@ func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) ([]PatriciaProof, 
 
 	// TODO
 
+}
+
+// RetrieveBatchProof creates a proof for a batch of targets against a state root
+// The proof consists of:
+//   The targets we are proving for (in left to right order)
+// 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
+//   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
+// NOTE: This version is meant to trim the data that's not needed,
+func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) (BatchPatriciaProof, error) {
+
+	// A slice of proofs of individual elements
+	individualProofs := make([]PatriciaProof, 0, 3000)
+
+	for _, target := range sort(targets) {
+		individualProofs = append(individualProofs, t.RetrieveProof(target))
+	}
+
+	var midpoints = new([]uint64, 0, 0)
+
+	for proof := range individualProofs {
+		midpoints = append(midpoints, proof.midpoints...)
+	}
+
+	sortRemoveDuplicates(midpoints)
+
+	var hashes = copy(individualProofs[0].hashes)
+
+	// To compress this data into a BatchPatriciaProof we must remove
+	// the hash children of nodes which occur in two individual proofs but fork
+	for i := 1; i < len(individualProofs); i++ {
+		proofA := individualProofs[i]
+		proofB := individualProofs[i-1]
+		// Iterate through i and i-1 to find the fork
+		for j, midpoint := range proofA {
+			if midpoint != proofB.midpoints[j] {
+				// Fork found
+				// Delete the hashes at j-1 from both
+				filterDelete(hashes, proofA.hashes[j-1])
+				filterDelete(hashes, proofB.hashes[j-1])
+				// Now add the hashes from proof A from after the fork
+				hashes = append(hashes, proofA.hashes[j:]...)
+
+			}
+		}
+	}
+
+	return BatchPatriciaProof{sort(targets), midpoints, hashes}
+
+	// TODO
+
+}
+
+// Helper function that sorts a slice and removes duplicate
+func sortRemoveDuplicates(a []uint64) {
+	a.sort()
+
+	for i := 0; i < len(a)-1; i++ {
+		if a[i] == a[i+1] {
+			// From https://yourbasic.org/golang/delete-element-slice/
+			// Remove the element at index i from a.
+			copy(a[i:], a[i+1:]) // Shift a[i+1:] left one index.
+			// a[len(a)-1] = ""     // Erase last element (write zero value).
+			a = a[:len(a)-1] // Truncate slice.
+
+			i--
+		}
+	}
+}
+
+// Helper function removes all copies of a specific value from a slice
+func filterDelete(a []Hash, val Hash) {
+
+	for i := 0; i < len(a)-1; i++ {
+		if a[i] == val {
+			// From https://yourbasic.org/golang/delete-element-slice/
+			// Remove the element at index i from a.
+			copy(a[i:], a[i+1:]) // Shift a[i+1:] left one index.
+			// a[len(a)-1] = ""     // Erase last element (write zero value).
+			a = a[:len(a)-1] // Truncate slice.
+
+			i--
+		}
+	}
 }
 
 // Adds a hash at a particular location and returns the new state root
