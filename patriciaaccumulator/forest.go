@@ -67,7 +67,7 @@ type Forest struct {
 	positionMap map[MiniHash]uint64
 	// Inverse of forestMap for leaves.
 
-	particiaLookup PatriciaLookup
+	particiaLookup patriciaLookup
 
 	/*
 	 * below are just for testing / benchmarking
@@ -106,29 +106,29 @@ type Forest struct {
 
 // TODO: It seems capitalized structs are exported. Should this be the case for the structs we define?
 
-type PatriciaLookup struct {
+type patriciaLookup struct {
 	stateRoot Hash
-	treeNodes map[Hash]PatriciaNode
+	treeNodes map[Hash]patriciaNode
 	// TODO add a leaf node to location map?
 }
 
-type PatriciaNode struct {
+type patriciaNode struct {
 	left     Hash
 	right    Hash
 	midpoint uint64 // The midpoint of the binary interval represented by the common
 }
 
-func (p *PatriciaNode) min() uint64 {
+func (p *patriciaNode) min() uint64 {
 	halfWidth := ((p.midpoint - 1) & p.midpoint) ^ p.midpoint
 	return p.midpoint - halfWidth
 }
 
-func (p *PatriciaNode) max() uint64 {
+func (p *patriciaNode) max() uint64 {
 	halfWidth := ((p.midpoint - 1) & p.midpoint) ^ p.midpoint
 	return p.midpoint + halfWidth
 }
 
-func (p *PatriciaNode) inRange(v uint64) bool {
+func (p *patriciaNode) inRange(v uint64) bool {
 	// If a leaf node, in range if equal to location
 	if p.left == p.right {
 		return v == p.midpoint
@@ -137,15 +137,14 @@ func (p *PatriciaNode) inRange(v uint64) bool {
 	return p.min() <= v && v < p.max()
 }
 
-func (p *PatriciaNode) inLeft(v uint64) bool {
-	// Should not be called for leaf node
+func (p *patriciaNode) inLeft(v uint64) bool {
 	if p.left == p.right {
-		panic()
+		panic("inLeft should not be called on leaf node")
 	}
 	return p.min() <= v && v < p.midpoint
 }
 
-func (p *PatriciaNode) hash() Hash {
+func (p *patriciaNode) hash() Hash {
 	var empty Hash
 	if p.left == empty || p.right == empty {
 		panic("got an empty leaf here. ")
@@ -156,14 +155,14 @@ func (p *PatriciaNode) hash() Hash {
 	return sha256.Sum256(append(hashBytes, midpointBytes...))
 }
 
-func newPatriciaNode(child1, child2 *PatriciaNode) *PatriciaNode {
+func newPatriciaNode(child1, child2 *patriciaNode) *patriciaNode {
 	// TODO: I think this should not deal with pointers
 
 	// TODO: DOes this work correctly when one of the children is a leaf?
 
-	p := new(PatriciaNode)
+	p := new(patriciaNode)
 
-	var leftChild, rightChild *PatriciaNode
+	var leftChild, rightChild *patriciaNode
 
 	if child1.min() < child2.max() {
 		leftChild = child1
@@ -188,12 +187,13 @@ func newPatriciaNode(child1, child2 *PatriciaNode) *PatriciaNode {
 	return p
 }
 
-func NewPatriciaLookup() *PatriciaLookup {
-	t := new(PatriciaLookup)
-	t.treeNodes = make(map[Hash]PatriciaNode)
+func NewPatriciaLookup() *patriciaLookup {
+	t := new(patriciaLookup)
+	t.treeNodes = make(map[Hash]patriciaNode)
+	return t
 }
 
-func (t *PatriciaLookup) merge(other *PatriciaLookup) {
+func (t *patriciaLookup) merge(other *patriciaLookup) {
 	for hash, node := range other.treeNodes {
 		t.treeNodes[hash] = node
 	}
@@ -218,12 +218,12 @@ func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) Pa
 //   The target we are proving for
 // 	 all midpoints on the main branch from the root to (Just before?) the proved leaf
 //   all hashes of nodes that are neighbors of nodes on the main branch, in order
-func (t *PatriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
+func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	// TODO consider replacing the return proof, error with just returning a proof
 	// If an error happens, we should just quit immediately rather than handling it
 
 	var proof PatriciaProof
-	var node PatriciaNode
+	var node patriciaNode
 	var nodeHash Hash
 	var neighborHash Hash
 	var midpoints = make([]uint64, 0, 64)
@@ -249,10 +249,10 @@ func (t *PatriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 			// REMARK (SURYA): We do not check whether the hash corresponds to the hash of a leaf
 			//perform a sanity check here
 			if len(midpoints) != len(neighborHashes)+1 {
-				return proof, fmt.Errorf("# midpoints %d, #hashes %d", len(midpoints), len(neighborHashes))
+				panic("# midpoints not equal to # hashes")
 			}
 			if node.midpoint != target {
-				return proof, fmt.Error("midpoint of leaf %d not equal to target %d%", node.midpoint, target)
+				panic("midpoint of leaf not equal to target")
 			}
 			proof = ConstructProof(target, midpoints, neighborHashes)
 			return proof, nil
@@ -278,23 +278,20 @@ func (t *PatriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	}
 }
 
-// RetrieveBatchProof creates a proof for a batch of targets against a state root
-// The proof consists of:
-//   The targets we are proving for (in left to right order)
-// 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
-//   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
-func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) ([]PatriciaProof, error) {
+// RetrieveListProofs creates a list of individual proofs for targets, in sorted order
+func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
 
 	// A slice of proofs of individual elements
 	individualProofs := make([]PatriciaProof, 0, 3000)
 
-	for _, target := range sort(targets) {
-		individualProofs = append(individualProofs, t.RetrieveProof(target))
+	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+
+	for _, target := range targets {
+		proof, _ := t.RetrieveProof(target)
+		individualProofs = append(individualProofs, proof)
 	}
 
-	return individualProofs
-
-	// TODO
+	return individualProofs, nil
 
 }
 
@@ -304,28 +301,23 @@ func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) ([]PatriciaProof, 
 // 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
 //   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
 // NOTE: This version is meant to trim the data that's not needed,
-func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) (BatchPatriciaProof, error) {
+func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchPatriciaProof {
 
 	// A slice of proofs of individual elements
-	individualProofs := make([]PatriciaProof, 0, 3000)
+	individualProofs, _ := t.RetrieveListProofs(targets)
 
-	// TODO check if this sorts in-place
-	sort.Sort(targets)
+	var midpoints = make([]uint64, 0, 0)
 
-	for _, target := range targets {
-		individualProofs = append(individualProofs, t.RetrieveProof(target))
-	}
-
-	var midpoints = new([]uint64, 0, 0)
-
-	for proof := range individualProofs {
+	for _, proof := range individualProofs {
 		midpoints = append(midpoints, proof.midpoints...)
 	}
 
 	sortRemoveDuplicates(midpoints)
 	// TODO compress this list
 
-	var hashes = copy(individualProofs[0].hashes)
+	// TODO segfault?
+	var hashes []Hash
+	copy(hashes, individualProofs[0].hashes)
 
 	// To compress this data into a BatchPatriciaProof we must remove
 	// the hash children of nodes which occur in two individual proofs but fork
@@ -347,7 +339,8 @@ func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) (BatchPatriciaProo
 		}
 	}
 
-	return BatchPatriciaProof{sort(targets), midpoints, hashes}
+	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+	return BatchPatriciaProof{targets, hashes, midpoints}
 
 	// TODO
 
@@ -355,7 +348,7 @@ func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) (BatchPatriciaProo
 
 // Helper function that sorts a slice and removes duplicate
 func sortRemoveDuplicates(a []uint64) {
-	a.sort()
+	sort.Slice(a, func(i, j int) bool { return a[i] < a[j] })
 
 	for i := 0; i < len(a)-1; i++ {
 		if a[i] == a[i+1] {
@@ -388,20 +381,20 @@ func filterDelete(a []Hash, val Hash) {
 }
 
 // Adds a hash at a particular location and returns the new state root
-func (t *PatriciaLookup) add(location uint64, toAdd Hash) error {
+func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
-	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
+	// TODO: Should the proof branch be the input, so this can be called without appatriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
 	node, ok := t.treeNodes[t.stateRoot]
 	if !ok {
-		return false, proof, fmt.Errorf("state root %x not found", t.stateRoot)
+		return fmt.Errorf("state root %x not found", t.stateRoot)
 	}
 
 	var hash Hash
-	var neighbor Node
-	neighborBranch := new([]PatriciaNode, 0, 64)
-	mainBranch := new([]PatriciaNode, 0, 64)
+	var neighbor patriciaNode
+	neighborBranch := make([]patriciaNode, 0, 64)
+	mainBranch := make([]patriciaNode, 0, 64)
 
 	// We descend the tree until we find a node which does not contain the location at which we are adding
 	// This node should be the sibling of the new leaf
@@ -412,7 +405,7 @@ func (t *PatriciaLookup) add(location uint64, toAdd Hash) error {
 		// THIS SHOULD NOT HAPPEN. We never add on top of something already added in this code
 		// (Block validity should already be checked at this point)
 		if node.left == node.right {
-			panic()
+			panic("If the min is the max, we are at a preexisting leaf. We should never add on top of something already added.")
 		}
 
 		// Determine if we descend left or right
@@ -431,10 +424,10 @@ func (t *PatriciaLookup) add(location uint64, toAdd Hash) error {
 	} // End loop
 
 	// Add the new leaf node
-	newLeafNode := PatriciaNode{toAdd, toAdd, location}
+	newLeafNode := patriciaNode{toAdd, toAdd, location}
 	t.treeNodes[newLeafNode.hash()] = newLeafNode
 	// Combine leaf node with its new sibling
-	nodeToAdd = newPatriciaNode(newLeafNode, node)
+	nodeToAdd := newPatriciaNode(newLeafNode, node)
 	t.treeNodes[nodeToAdd.hash()] = nodeToAdd
 
 	// We travel up the branch, recombining nodes
@@ -456,10 +449,10 @@ func (t *PatriciaLookup) add(location uint64, toAdd Hash) error {
 }
 
 // Based on add above: this code removes a location and returns the new root
-func (t *PatriciaLookup) remove(location uint64) {
+func (t *patriciaLookup) remove(location uint64) {
 
 	// TODO: should state root be a property of patriciaLookup, and we avoid a single lookup representing multiple roots?
-	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
+	// TODO: Should the proof branch be the input, so this can be called without appatriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
 	node, ok := t.treeNodes[t.stateRoot]
