@@ -309,7 +309,10 @@ func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) (BatchPatriciaProo
 	// A slice of proofs of individual elements
 	individualProofs := make([]PatriciaProof, 0, 3000)
 
-	for _, target := range sort(targets) {
+	// TODO check if this sorts in-place
+	sort.Sort(targets)
+
+	for _, target := range targets {
 		individualProofs = append(individualProofs, t.RetrieveProof(target))
 	}
 
@@ -320,23 +323,25 @@ func (t *PatriciaLookup) RetrieveBatchProof(targets []uint64) (BatchPatriciaProo
 	}
 
 	sortRemoveDuplicates(midpoints)
+	// TODO compress this list
 
 	var hashes = copy(individualProofs[0].hashes)
 
 	// To compress this data into a BatchPatriciaProof we must remove
 	// the hash children of nodes which occur in two individual proofs but fork
 	for i := 1; i < len(individualProofs); i++ {
-		proofA := individualProofs[i]
-		proofB := individualProofs[i-1]
+		proofCurrent := individualProofs[i]
+		proofPrev := individualProofs[i-1]
 		// Iterate through i and i-1 to find the fork
-		for j, midpoint := range proofA {
-			if midpoint != proofB.midpoints[j] {
+		for j, midpoint := range proofCurrent.midpoints {
+			if midpoint != proofPrev.midpoints[j] {
 				// Fork found
 				// Delete the hashes at j-1 from both
-				filterDelete(hashes, proofA.hashes[j-1])
-				filterDelete(hashes, proofB.hashes[j-1])
+				// filterDelete(hashes, proofCurrent.hashes[j-1])
+				filterDelete(hashes, proofPrev.hashes[j-1])
 				// Now add the hashes from proof A from after the fork
-				hashes = append(hashes, proofA.hashes[j:]...)
+				hashes = append(hashes, proofCurrent.hashes[j:]...)
+				break
 
 			}
 		}
@@ -367,6 +372,7 @@ func sortRemoveDuplicates(a []uint64) {
 
 // Helper function removes all copies of a specific value from a slice
 func filterDelete(a []Hash, val Hash) {
+	// TODO computational efficiency.
 
 	for i := 0; i < len(a)-1; i++ {
 		if a[i] == val {
