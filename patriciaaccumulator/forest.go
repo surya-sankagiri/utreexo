@@ -155,14 +155,13 @@ func (p *patriciaNode) hash() Hash {
 	return sha256.Sum256(append(hashBytes, midpointBytes...))
 }
 
-func newPatriciaNode(child1, child2 *patriciaNode) *patriciaNode {
-	// TODO: I think this should not deal with pointers
+func newPatriciaNode(child1, child2 patriciaNode) patriciaNode {
 
 	// TODO: DOes this work correctly when one of the children is a leaf?
 
-	p := new(patriciaNode)
+	var p patriciaNode
 
-	var leftChild, rightChild *patriciaNode
+	var leftChild, rightChild patriciaNode
 
 	if child1.min() < child2.max() {
 		leftChild = child1
