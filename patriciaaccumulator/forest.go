@@ -459,7 +459,6 @@ func (t *patriciaLookup) remove(location uint64) {
 	node, ok := t.treeNodes[t.stateRoot]
 	if !ok {
 		panic()
-		return false, proof, fmt.Errorf("state root %x not found", stateRoot)
 	}
 
 	var hash Hash
