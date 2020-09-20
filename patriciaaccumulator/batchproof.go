@@ -110,6 +110,7 @@ func Argsort(src []uint64, inds []int) {
 // there seems to be two syntaxes for write; need to figure that out-Surya
 // The trick is to write both the number of targets and the number of midpoints
 
+// ToBytes serializes a BatchPatriciaProof
 func (bp *BatchPatriciaProof) ToBytes() []byte {
 	var buf bytes.Buffer
 
