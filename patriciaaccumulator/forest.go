@@ -432,7 +432,9 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	// We travel up the branch, recombining nodes
 	for len(neighborBranch) > 0 {
 		// nodeToAdd must now replace the hash of the last node of mainBranch in the second-to-last node of mainBranch
-		neighborNode = neighborBranch.pop()
+		// Pop neighborNode off
+		neighborNode := neighborBranch[len(neighborBranch)-1]
+		neighborBranch = neighborBranch[:len(neighborBranch)-1]
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
 		t.treeNodes[nodeToAdd.hash()] = nodeToAdd
 	}
