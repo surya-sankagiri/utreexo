@@ -458,13 +458,13 @@ func (t *patriciaLookup) remove(location uint64) {
 
 	node, ok := t.treeNodes[t.stateRoot]
 	if !ok {
-		panic()
+		panic("Could not find root")
 	}
 
 	var hash Hash
-	var neighbor Node
-	neighborBranch := new([]PatriciaNode, 0, 64)
-	mainBranch := new([]PatriciaNode, 0, 64)
+	var neighbor patriciaNode
+	neighborBranch := make([]patriciaNode, 0, 64)
+	mainBranch := make([]patriciaNode, 0, 64)
 
 	// We descend the tree until we find a leaf node
 	// This node should be the sibling of the new leaf
@@ -486,10 +486,10 @@ func (t *patriciaLookup) remove(location uint64) {
 		node = t.treeNodes[hash]
 
 	} // End loop
-	append(mainBranch, node)
+	mainBranch = append(mainBranch, node)
 
 	// Check that the leaf node we found has the right location
-	if node.location != location {
+	if node.midpoint != location {
 		panic("Found wrong location in remove")
 	}
 
@@ -501,18 +501,21 @@ func (t *patriciaLookup) remove(location uint64) {
 	// If there is one element in the neighbor nodes, the leaf we deleted was a child of the root
 	// The neighbor becomes the new root.
 	if len(neighborBranch) == 1 {
-		return neighborBranch[0].hash()
+		// return neighborBranch[0].hash()
+		return
 	}
 
 	// Otherwise, the lowest new node is the combination of the sibling and uncle of the deleted leaf
 	// That is, the last two nodes in the neighborBranch
-	nodeToAdd = newPatriciaNode(neighborBranch.pop(), neighborBranch.pop())
+	nodeToAdd := newPatriciaNode(neighborBranch[len(neighborBranch)-1], neighborBranch[len(neighborBranch)-2])
+	neighborBranch = neighborBranch[:len(neighborBranch)-2]
 	t.treeNodes[nodeToAdd.hash()] = nodeToAdd
 
 	// We travel up the branch, recombining nodes
 	for len(neighborBranch) > 0 {
 		// nodeToAdd must now replace the hash of the last node of mainBranch in the second-to-last node of mainBranch
-		neighborNode = neighborBranch.pop()
+		neighborNode := neighborBranch[len(neighborBranch)-1]
+		neighborBranch = neighborBranch[:len(neighborBranch)-1]
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
 		t.treeNodes[nodeToAdd.hash()] = nodeToAdd
 	}
@@ -532,7 +535,7 @@ func (f *Forest) removev5(dels []uint64) error {
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.maxLeaf)
 		}
 
-		f.particiaLookup.removeAt(dpos)
+		f.particiaLookup.remove(dpos)
 	}
 
 	f.numLeaves = nextNumLeaves
@@ -875,7 +878,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	}
 
 	// v3 should do the exact same thing as v2 now
-	err := f.removev4(dels)
+	err := f.removev5(dels)
 	if err != nil {
 		return nil, err
 	}
@@ -886,7 +889,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	// BuildUndoData takes all the stuff swapped to the right by removev3
 	// and saves it in the order it's in, which should make it go back to
 	// the right place when it's swapped in reverse
-	ub := f.BuildUndoData(uint64(numadds), dels)
+	ub := f.BuildUndoData(uint64(numAdds), dels)
 
 	f.addv2(adds)
 
