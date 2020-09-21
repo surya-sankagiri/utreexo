@@ -8,7 +8,7 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/surya-sankagiri/utreexo/accumulator"
+	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 )
 
 type Hash [32]byte

@@ -67,7 +67,7 @@ type Forest struct {
 	positionMap map[MiniHash]uint64
 	// Inverse of forestMap for leaves.
 
-	particiaLookup patriciaLookup
+	lookup patriciaLookup
 
 	/*
 	 * below are just for testing / benchmarking
@@ -107,8 +107,9 @@ type Forest struct {
 // TODO: It seems capitalized structs are exported. Should this be the case for the structs we define?
 
 type patriciaLookup struct {
-	stateRoot Hash
-	treeNodes map[Hash]patriciaNode
+	stateRoot     Hash
+	treeNodes     map[Hash]patriciaNode
+	leafLocations map[Hash]uint64
 	// TODO add a leaf node to location map?
 }
 
@@ -300,7 +301,12 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 // 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
 //   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
 // NOTE: This version is meant to trim the data that's not needed,
-func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchPatriciaProof {
+func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
+
+	// If no targets, return empty batchproof
+	if len(targets) == 0 {
+		return BatchProof{targets, make([]Hash, 0, 0), make([]uint64, 0, 0)}
+	}
 
 	// A slice of proofs of individual elements
 	individualProofs, _ := t.RetrieveListProofs(targets)
@@ -315,10 +321,10 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchPatriciaProof
 	// TODO compress this list
 
 	// TODO segfault?
-	var hashes []Hash
+	hashes := make([]Hash, len(individualProofs[0].hashes))
 	copy(hashes, individualProofs[0].hashes)
 
-	// To compress this data into a BatchPatriciaProof we must remove
+	// To compress this data into a BatchProof we must remove
 	// the hash children of nodes which occur in two individual proofs but fork
 	for i := 1; i < len(individualProofs); i++ {
 		proofCurrent := individualProofs[i]
@@ -339,10 +345,19 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchPatriciaProof
 	}
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-	return BatchPatriciaProof{targets, hashes, midpoints}
+	return BatchProof{targets, hashes, midpoints}
 
 	// TODO
 
+}
+
+func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
+	targets := make([]uint64, len(hashes))
+	for i, hash := range hashes {
+		targets[i] = f.lookup.leafLocations[hash]
+	}
+
+	return f.lookup.RetrieveBatchProof(targets), nil
 }
 
 // Helper function that sorts a slice and removes duplicate
@@ -384,6 +399,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	// TODO: Should the proof branch be the input, so this can be called without appatriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
+	t.leafLocations[toAdd] = location
 
 	node, ok := t.treeNodes[t.stateRoot]
 	if !ok {
@@ -535,7 +551,7 @@ func (f *Forest) removev5(dels []uint64) error {
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.maxLeaf)
 		}
 
-		f.particiaLookup.remove(dpos)
+		f.lookup.remove(dpos)
 	}
 
 	f.numLeaves = nextNumLeaves
@@ -824,24 +840,30 @@ func (f *Forest) Add(adds []Leaf) {
 func (f *Forest) addv2(adds []Leaf) {
 
 	for _, add := range adds {
-		// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
-		f.positionMap[add.Mini()] = f.numLeaves
 
-		rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
-		pos := f.numLeaves
-		n := add.Hash
-		f.data.write(pos, n)
-		for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
-			// grab, pop, swap, hash, new
-			root := f.data.read(rootPositions[h]) // grab
-			//			fmt.Printf("grabbed %x from %d\n", root[:12], roots[h])
-			n = parentHash(root, n)   // hash
-			pos = parent(pos, f.rows) // rise
-			f.data.write(pos, n)      // write
-			//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
-		}
-		f.numLeaves++
+		f.lookup.add(f.maxLeaf, add.Hash)
+
+		f.maxLeaf++
 	}
+	// for _, add := range adds {
+	// 	// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
+	// 	f.positionMap[add.Mini()] = f.numLeaves
+
+	// 	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
+	// 	pos := f.numLeaves
+	// 	n := add.Hash
+	// 	f.data.write(pos, n)
+	// 	for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
+	// 		// grab, pop, swap, hash, new
+	// 		root := f.data.read(rootPositions[h]) // grab
+	// 		//			fmt.Printf("grabbed %x from %d\n", root[:12], roots[h])
+	// 		n = parentHash(root, n)   // hash
+	// 		pos = parent(pos, f.rows) // rise
+	// 		f.data.write(pos, n)      // write
+	// 		//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
+	// 	}
+	// 	f.numLeaves++
+	// }
 }
 
 // Modify changes the forest, adding and deleting leaves and updating internal nodes.

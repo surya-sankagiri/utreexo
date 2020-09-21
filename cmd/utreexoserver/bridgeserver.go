@@ -116,6 +116,7 @@ func main() {
 
 	fmt.Printf("datadir is %s\n", dataDir)
 	err := bridge.BuildProofs(param, dataDir, *forestInRam, *forestCache, sig)
+	// err := bridge.BuildPatriciaProofs(param, dataDir, *forestInRam, *forestCache, sig)
 	if err != nil {
 		fmt.Printf("Buildproofs error: %s\n", err.Error())
 		panic("server halting")

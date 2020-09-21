@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/surya-sankagiri/utreexo/accumulator"
-	"github.com/surya-sankagiri/utreexo/patriciaaccumulator"
+	// "github.com/surya-sankagiri/utreexo/accumulator"
+
+	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 	"github.com/surya-sankagiri/utreexo/util"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -182,6 +183,169 @@ func BuildProofs(
 
 }
 
+// func BuildPatriciaProofs(
+// 	param chaincfg.Params, dataDir string,
+// 	forestInRam, forestCached bool, sig chan bool) error {
+
+// 	// Channel to alert the tell the main loop it's ok to exit
+// 	haltRequest := make(chan bool, 1)
+
+// 	// Waitgroup to alert stopBuildProofs() that revoffet and offset has
+// 	// been finished
+// 	offsetFinished := make(chan bool, 1)
+
+// 	// Channel for stopBuildProofs() to wait
+// 	haltAccept := make(chan bool, 1)
+
+// 	// Handle user interruptions
+// 	go stopBuildProofs(sig, offsetFinished, haltRequest, haltAccept)
+
+// 	// Creates all the directories needed for bridgenode
+// 	util.MakePaths()
+
+// 	// Init forest and variables. Resumes if the data directory exists
+// 	forest, height, knownTipHeight, err :=
+// 		initBridgeNodeState(param, dataDir, forestInRam, forestCached, offsetFinished)
+// 	if err != nil {
+// 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
+// 		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+// 		return err
+// 	}
+// 	// for testing only
+// 	// knownTipHeight = 32500
+
+// 	ttlpath := "utree/" + param.Name + "ttldb"
+// 	// Open leveldb
+// 	o := opt.Options{CompactionTableSizeMultiplier: 8}
+// 	lvdb, err := leveldb.OpenFile(ttlpath, &o)
+// 	if err != nil {
+// 		fmt.Printf("initialization error.  If your .blk and .dat files are ")
+// 		fmt.Printf("not in %s, specify alternate path with -datadir\n.", dataDir)
+// 		return err
+// 	}
+// 	defer lvdb.Close()
+
+// 	// For ttl value writing
+// 	var batchwg sync.WaitGroup
+// 	batchan := make(chan *leveldb.Batch, 10)
+
+// 	// Start 16 workers. Just an arbitrary number
+// 	for j := 0; j < 16; j++ {
+// 		go DbWorker(batchan, lvdb, &batchwg)
+// 	}
+
+// 	// To send/receive blocks from blockreader()
+// 	blockAndRevReadQueue := make(chan BlockAndRev, 10)
+
+// 	// Reads block asynchronously from .dat files
+// 	// Reads util the lastIndexOffsetHeight
+// 	go BlockAndRevReader(blockAndRevReadQueue, dataDir, "",
+// 		knownTipHeight, height)
+// 	proofChan := make(chan []byte, 10)
+// 	var fileWait sync.WaitGroup
+// 	go proofWriterWorker(proofChan, &fileWait)
+
+// 	fmt.Println("Building Proofs and ttldb...")
+
+// 	var stop bool // bool for stopping the main loop
+
+// 	// Make a file for saving the proof size data
+// 	datafile, err := os.OpenFile("sizedata.csv",
+// 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+// 	if err != nil {
+// 		log.Println(err)
+// 	}
+// 	defer datafile.Close()
+
+// 	for ; height != knownTipHeight && !stop; height++ {
+
+// 		// Receive txs from the asynchronous blk*.dat reader
+// 		bnr := <-blockAndRevReadQueue
+
+// 		// Writes the ttl values for each tx to leveldb
+// 		WriteBlock(bnr, batchan, &batchwg)
+
+// 		// Get the add and remove data needed from the block & undo block
+// 		blockAdds, delLeaves, err := blockToAddDel(bnr)
+// 		if err != nil {
+// 			return err
+// 		}
+
+// 		// use the accumulator to get inclusion proofs, and produce a block
+// 		// proof with all data needed to verify the block
+// 		ud, err := genPatriciaUData(delLeaves, forest, bnr.Height)
+// 		if err != nil {
+// 			return err
+// 		}
+
+// 		// convert UData struct to bytes
+// 		b := ud.ToBytes()
+
+// 		// In theory, all I have to do is to pipe height and len(b) to a file
+// 		if _, err := datafile.WriteString(fmt.Sprintf("%d, %d \n", height, len(b))); err != nil {
+// 			log.Println(err)
+// 		}
+
+// 		// Add to WaitGroup and send data to channel to be written
+// 		// to disk
+// 		fileWait.Add(1)
+// 		proofChan <- b
+
+// 		ud.AccProof.SortTargets()
+
+// 		// fmt.Printf("h %d adds %d targets %d\n",
+// 		// 	height, len(blockAdds), len(ud.AccProof.Targets))
+
+// 		// TODO: Don't ignore undoblock
+// 		// Modifies the forest with the given TXINs and TXOUTs
+// 		_, err = forest.Modify(blockAdds, ud.AccProof.Targets)
+// 		if err != nil {
+// 			return err
+// 		}
+
+// 		if bnr.Height%100 == 0 {
+// 			fmt.Println("On block :", bnr.Height+1)
+// 		}
+
+// 		// Check if stopSig is no longer false
+// 		// stop = true makes the loop exit
+// 		select {
+// 		case stop = <-haltRequest: // receives true from stopBuildProofs()
+// 		default:
+// 		}
+// 	}
+
+// 	// wait until dbWorker() has written to the ttldb file
+// 	// allows leveldb to close gracefully
+// 	batchwg.Wait()
+
+// 	// Wait for the file workers to finish
+// 	fileWait.Wait()
+
+// 	// Save the current state so genproofs can be resumed
+// 	err = saveBridgeNodeData(forest, height, forestInRam)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	fmt.Println("Done writing")
+
+// 	if stop {
+// 		// genproofs was paused.
+// 		// Tell stopBuildProofs that it's ok to exit
+// 		haltAccept <- true
+// 		return nil
+// 	}
+
+// 	// should be a goroutine..?  isn't right now
+// 	blockServer(knownTipHeight, dataDir, haltRequest, haltAccept, lvdb)
+
+// 	// Tell stopBuildProofs that it's ok to exit
+// 	haltAccept <- true
+// 	return nil
+
+// }
+
 // genBlockProof calls forest.ProveBatch with the hash data to get a batched
 // inclusion proof from the accumulator. It then adds on the utxo leaf data,
 // to create a block proof which both proves inclusion and gives all utxo data
@@ -234,35 +398,35 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	return
 }
 
-func genPatriciaUData(delLeaves []util.LeafData, f *patriciaaccumulator.Forest, height int32) (
-	ud patriciaaccumulator.PatriciaUData, err error) {
+// func genPatriciaUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
+// 	ud accumulator.PatriciaUData, err error) {
 
-	ud.UtxoData = delLeaves
-	// make slice of hashes from leafdata
-	delHashes := make([]accumulator.Hash, len(ud.UtxoData))
-	for i := range ud.UtxoData {
-		delHashes[i] = ud.UtxoData[i].LeafHash()
-		// fmt.Printf("del %s -> %x\n",
-		// ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
-	}
-	// generate block proof. Errors if the tx cannot be proven
-	// Should never error out with genproofs as it takes
-	// blk*.dat files which have already been vetted by Bitcoin Core
-	ud.AccProof, err = f.ProvePatriciaBatch(delHashes)
-	if err != nil {
-		err = fmt.Errorf("genUData failed at block %d %s %s",
-			height, f.Stats(), err.Error())
-		return
-	}
+// 	ud.UtxoData = delLeaves
+// 	// make slice of hashes from leafdata
+// 	delHashes := make([]accumulator.Hash, len(ud.UtxoData))
+// 	for i := range ud.UtxoData {
+// 		delHashes[i] = ud.UtxoData[i].LeafHash()
+// 		// fmt.Printf("del %s -> %x\n",
+// 		// ud.UtxoData[i].Outpoint.String(), delHashes[i][:4])
+// 	}
+// 	// generate block proof. Errors if the tx cannot be proven
+// 	// Should never error out with genproofs as it takes
+// 	// blk*.dat files which have already been vetted by Bitcoin Core
+// 	ud.AccProof, err = f.ProvePatriciaBatch(delHashes)
+// 	if err != nil {
+// 		err = fmt.Errorf("genUData failed at block %d %s %s",
+// 			height, f.Stats(), err.Error())
+// 		return
+// 	}
 
-	if len(ud.AccProof.Targets) != len(delLeaves) {
-		err = fmt.Errorf("genUData %d targets but %d leafData",
-			len(ud.AccProof.Targets), len(delLeaves))
-		return
-	}
+// 	if len(ud.AccProof.Targets) != len(delLeaves) {
+// 		err = fmt.Errorf("genUData %d targets but %d leafData",
+// 			len(ud.AccProof.Targets), len(delLeaves))
+// 		return
+// 	}
 
-	return
-}
+// 	return
+// }
 
 // genAddDel is a wrapper around genAdds and genDels. It calls those both and
 // throws out all the same block spends.

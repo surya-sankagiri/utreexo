@@ -19,9 +19,9 @@ import (
 // TODO it is actually possible to avoid including a prefix in every node of a proof and instead only hash in the prefix lengths
 // This makesthe system more space-efficient. See https://ethresear.ch/t/binary-trie-format/7621/6
 
-// BatchPatriciaProof is a potential replacement structure for BatchProof in the PatriciaAccumulator Implementation - Bolton
-type BatchPatriciaProof struct {
-	targets   []uint64
+// BatchProof is a potential replacement structure for BatchProof in the PatriciaAccumulator Implementation - Bolton
+type BatchProof struct {
+	Targets   []uint64
 	hashes    []Hash   // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
 	midpoints []uint64 // List of equal midpoints of nodes that are ancestors of deleted elements
 	// Checking a proof requires all midpoints in the branch to the element, and all hashes of siblings
@@ -43,19 +43,28 @@ type PatriciaProof struct {
 	// 2. when we don't have a leaf, we take the next element of hashes, and we order hashes so that this element is the correct next one.
 }
 
-// MergeProofs takes as inputs a slice of PatriciaProofs and gives as output a single BatchPatriciaProof-Surya
+func (bp BatchProof) SortTargets() {
+	// Dummy function
+}
+
+func (bp BatchProof) Reconstruct(nl uint64, h uint8) (map[uint64]Hash, error) {
+	// Dummy function
+	return make(map[uint64]Hash), nil
+}
+
+// MergeProofs takes as inputs a slice of PatriciaProofs and gives as output a single BatchProof-Surya
 // TODO: Debug this function
 // TODO: make the running time of the code more efficient, if possible -Surya
-// TODO: make the BatchPatriciaProof struct more efficient by removing repeated entries -Surya
-func MergeProofs(indProofs []PatriciaProof) BatchPatriciaProof {
-	var batchProof BatchPatriciaProof
-	targets := []uint64{}
+// TODO: make the BatchProof struct more efficient by removing repeated entries -Surya
+func MergeProofs(indProofs []PatriciaProof) BatchProof {
+	var batchProof BatchProof
+	Targets := []uint64{}
 	for _, proof := range indProofs {
-		targets = append(targets, proof.target)
+		Targets = append(Targets, proof.target)
 	}
-	sortedIndices := ArgsortNew(targets)
+	sortedIndices := ArgsortNew(Targets)
 	for _, i := range sortedIndices {
-		batchProof.targets = append(batchProof.targets, indProofs[i].target)
+		batchProof.Targets = append(batchProof.Targets, indProofs[i].target)
 		batchProof.midpoints = append(batchProof.midpoints, indProofs[i].midpoints...)
 		batchProof.hashes = append(batchProof.hashes, indProofs[i].hashes...)
 	}
@@ -108,14 +117,14 @@ func Argsort(src []uint64, inds []int) {
 // -------------------------------------
 
 // there seems to be two syntaxes for write; need to figure that out-Surya
-// The trick is to write both the number of targets and the number of midpoints
+// The trick is to write both the number of Targets and the number of midpoints
 
-// ToBytes serializes a BatchPatriciaProof
-func (bp *BatchPatriciaProof) ToBytes() []byte {
+// ToBytes serializes a BatchProof
+func (bp *BatchProof) ToBytes() []byte {
 	var buf bytes.Buffer
 
-	// first write the number of targets (4 byte uint32)
-	numTargets := uint32(len(bp.targets))
+	// first write the number of Targets (4 byte uint32)
+	numTargets := uint32(len(bp.Targets))
 	if numTargets == 0 {
 		return nil
 	}
@@ -126,14 +135,14 @@ func (bp *BatchPatriciaProof) ToBytes() []byte {
 	// then write the number of midpoints (4 byte uint32)
 	numMidpoints := uint32(len(bp.midpoints))
 	if numMidpoints == 0 {
-		panic("non-zero targets but no midpoints.")
+		panic("non-zero Targets but no midpoints.")
 	}
 	err = binary.Write(&buf, binary.BigEndian, numMidpoints)
 	if err != nil {
 		panic("error in converting batchproof to bytes.")
 	}
-	// next, actually write the targets
-	for _, t := range bp.targets {
+	// next, actually write the Targets
+	for _, t := range bp.Targets {
 		err := binary.Write(&buf, binary.BigEndian, t)
 		if err != nil {
 			panic("error in converting batchproof to bytes.")
@@ -163,7 +172,7 @@ func (bp *BatchPatriciaProof) ToBytes() []byte {
 // func (bp *BatchProof) ToBytes() []byte {
 // 	var buf bytes.Buffer
 
-// 	// first write the number of targets (4 byte uint32)
+// 	// first write the number of Targets (4 byte uint32)
 // 	numTargets := uint32(len(bp.Targets))
 // 	if numTargets == 0 {
 // 		return nil
@@ -193,7 +202,7 @@ func (bp *BatchPatriciaProof) ToBytes() []byte {
 // 	return buf.Bytes()
 // }
 
-// // TODO: understand the two functions below and if necessary, write the same for BatchPatriciaProof
+// // TODO: understand the two functions below and if necessary, write the same for BatchProof
 // // ToString for debugging, shows the blockproof
 // func (bp *BatchProof) SortTargets() {
 // 	sortUint64s(bp.Targets)
@@ -201,7 +210,7 @@ func (bp *BatchPatriciaProof) ToBytes() []byte {
 
 // // ToString for debugging, shows the blockproof
 // func (bp *BatchProof) ToString() string {
-// 	s := fmt.Sprintf("%d targets: ", len(bp.Targets))
+// 	s := fmt.Sprintf("%d Targets: ", len(bp.Targets))
 // 	for _, t := range bp.Targets {
 // 		s += fmt.Sprintf("%d\t", t)
 // 	}
@@ -213,21 +222,21 @@ func (bp *BatchPatriciaProof) ToBytes() []byte {
 // 	return s
 // }
 
-func FromBytesBatchProof(b []byte) (BatchPatriciaProof, error) {
-	var bp BatchPatriciaProof
+func FromBytesBatchProof(b []byte) (BatchProof, error) {
+	var bp BatchProof
 
-	// if empty slice, return empty BatchProof with 0 targets
+	// if empty slice, return empty BatchProof with 0 Targets
 	if len(b) == 0 {
 		return bp, nil
 	}
 	// otherwise, if there are less than 8 bytes we can't even see the number
-	// of targets and number of midpoints so something is wrong
+	// of Targets and number of midpoints so something is wrong
 	if len(b) < 8 {
 		return bp, fmt.Errorf("batchproof only %d bytes", len(b))
 	}
 
 	buf := bytes.NewBuffer(b)
-	// read 4 byte number of targets
+	// read 4 byte number of Targets
 	var numTargets uint32
 	err := binary.Read(buf, binary.BigEndian, &numTargets)
 	if err != nil {
@@ -240,10 +249,10 @@ func FromBytesBatchProof(b []byte) (BatchPatriciaProof, error) {
 	if err != nil {
 		return bp, err
 	}
-	//read the targets
-	bp.targets = make([]uint64, numTargets)
-	for i := range bp.targets {
-		err := binary.Read(buf, binary.BigEndian, &bp.targets[i])
+	//read the Targets
+	bp.Targets = make([]uint64, numTargets)
+	for i := range bp.Targets {
+		err := binary.Read(buf, binary.BigEndian, &bp.Targets[i])
 		if err != nil {
 			return bp, err
 		}
@@ -274,18 +283,18 @@ func FromBytesBatchProof(b []byte) (BatchPatriciaProof, error) {
 // func FromBytesBatchProof(b []byte) (BatchProof, error) {
 // 	var bp BatchProof
 
-// 	// if empty slice, return empty BatchProof with 0 targets
+// 	// if empty slice, return empty BatchProof with 0 Targets
 // 	if len(b) == 0 {
 // 		return bp, nil
 // 	}
 // 	// otherwise, if there are less than 4 bytes we can't even see the number
-// 	// of targets so something is wrong
+// 	// of Targets so something is wrong
 // 	if len(b) < 4 {
 // 		return bp, fmt.Errorf("batchproof only %d bytes", len(b))
 // 	}
 
 // 	buf := bytes.NewBuffer(b)
-// 	// read 4 byte number of targets
+// 	// read 4 byte number of Targets
 // 	var numTargets uint32
 // 	err := binary.Read(buf, binary.BigEndian, &numTargets)
 // 	if err != nil {
@@ -362,7 +371,7 @@ func FromBytesBatchProof(b []byte) (BatchPatriciaProof, error) {
 // 		for len(tagRow) > 0 {
 // 			// Efficiency gains here. If there are two or more things to verify,
 // 			// check if the next thing to verify is the sibling of the current leaf
-// 			// we're on. Siblingness can be checked with bitwise XOR but since targets are
+// 			// we're on. Siblingness can be checked with bitwise XOR but since Targets are
 // 			// sorted, we can do bitwise OR instead.
 // 			if len(tagRow) > 1 && tagRow[0]|1 == tagRow[1] {
 // 				left = tagRow[0]
@@ -448,7 +457,7 @@ func FromBytesBatchProof(b []byte) (BatchPatriciaProof, error) {
 // 		return proofTree, nil
 // 	}
 // 	proof := bp.Proof // back up proof
-// 	targets := bp.Targets
+// 	Targets := bp.Targets
 // 	rootPositions, rootRows := getRootsReverse(numleaves, forestRows)
 
 // 	if verbose {
@@ -461,45 +470,45 @@ func FromBytesBatchProof(b []byte) (BatchPatriciaProof, error) {
 // 	var needSibRow, nextRow []uint64 // only even siblings needed
 
 // 	// a bit strange; pop off 2 hashes at a time, and either 1 or 2 positions
-// 	for len(bp.Proof) > 0 && len(targets) > 0 {
+// 	for len(bp.Proof) > 0 && len(Targets) > 0 {
 
-// 		if targets[0] == rootPositions[0] {
+// 		if Targets[0] == rootPositions[0] {
 // 			// target is a root; this can only happen at row 0;
 // 			// there's a "proof" but don't need to actually send it
 // 			if verbose {
-// 				fmt.Printf("placed single proof at %d\n", targets[0])
+// 				fmt.Printf("placed single proof at %d\n", Targets[0])
 // 			}
-// 			proofTree[targets[0]] = bp.Proof[0]
+// 			proofTree[Targets[0]] = bp.Proof[0]
 // 			bp.Proof = bp.Proof[1:]
-// 			targets = targets[1:]
+// 			Targets = Targets[1:]
 // 			continue
 // 		}
 
 // 		// there should be 2 proofs left then
 // 		if len(bp.Proof) < 2 {
 // 			return nil, fmt.Errorf("only 1 proof left but need 2 for %d",
-// 				targets[0])
+// 				Targets[0])
 // 		}
 
 // 		// populate first 2 proof hashes
-// 		right := targets[0] | 1
+// 		right := Targets[0] | 1
 // 		left := right ^ 1
 
 // 		proofTree[left] = bp.Proof[0]
 // 		proofTree[right] = bp.Proof[1]
-// 		needSibRow = append(needSibRow, parent(targets[0], forestRows))
+// 		needSibRow = append(needSibRow, parent(Targets[0], forestRows))
 // 		// pop em off
 // 		if verbose {
 // 			fmt.Printf("placed proofs at %d, %d\n", left, right)
 // 		}
 // 		bp.Proof = bp.Proof[2:]
 
-// 		if len(targets) > 1 && targets[0]|1 == targets[1] {
+// 		if len(Targets) > 1 && Targets[0]|1 == Targets[1] {
 // 			// pop off 2 positions
-// 			targets = targets[2:]
+// 			Targets = Targets[2:]
 // 		} else {
 // 			// only pop off 1
-// 			targets = targets[1:]
+// 			Targets = Targets[1:]
 // 		}
 // 	}
 
