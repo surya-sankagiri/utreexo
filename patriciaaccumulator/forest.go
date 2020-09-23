@@ -42,17 +42,6 @@ type Forest struct {
 	maxLeaf   uint64 // the index of the largest leaf that has ever existed in the trie
 	// I think this will be necessary in the add function
 	// TODO make sure maxLeaf is updated correctly
-	// rows in the forest. (forest height) NON INTUITIVE!
-	// When there is only 1 tree in the forest, it is equal to the rows of
-	// that tree (2**h nodes).  If there are multiple trees, rows will
-	// be 1 more than the tallest tree in the forest.
-	// While you could just run treeRows(numLeaves), and pollard does just this,
-	// here it incurs the cost of a reMap when you cross a power of 2 boundary.
-	// So right now it reMaps on the way up, but NOT on the way down, so the
-	// rows can sometimes be higher than it would be as treeRows(numLeaves)
-	// A little weird; could remove this, but likely would have a performance
-	// penalty if the set dances right above / below a power of 2 leaves.
-	rows uint8
 
 	// "data" (not the best name but) is an interface to storing the forest
 	// hashes.  There's ram based and disk based for now, maybe if one
