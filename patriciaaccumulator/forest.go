@@ -559,6 +559,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		// for in-ram
 		f.data = new(ramForestData)
 	} else {
+		panic("We cannot yet create a forest from cache or memory")
 
 		if cached {
 			d := new(cacheForestData)
@@ -575,6 +576,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 
 	f.data.resize(1)
 	f.positionMap = make(map[MiniHash]uint64)
+	f.lookup = patriciaLookup{Hash{}, make(map[Hash]patriciaNode), make(map[Hash]uint64)}
 	return f
 }
 
