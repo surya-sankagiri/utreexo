@@ -1190,17 +1190,17 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 // 	return roots
 // }
 
-// // Stats :
-// func (f *Forest) Stats() string {
+// Stats :
+func (f *Forest) Stats() string {
 
-// 	s := fmt.Sprintf("numleaves: %d hashesever: %d posmap: %d forest: %d\n",
-// 		f.numLeaves, f.HistoricHashes, len(f.positionMap), f.data.size())
+	s := fmt.Sprintf("numleaves: %d hashesever: %d posmap: %d forest: %d\n",
+		f.numLeaves, f.HistoricHashes, len(f.positionMap), f.data.size())
 
-// 	s += fmt.Sprintf("\thashT: %.2f remT: %.2f (of which MST %.2f) proveT: %.2f",
-// 		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
-// 		f.TimeInProve.Seconds())
-// 	return s
-// }
+	s += fmt.Sprintf("\thashT: %.2f remT: %.2f (of which MST %.2f) proveT: %.2f",
+		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
+		f.TimeInProve.Seconds())
+	return s
+}
 
 // // ToString prints out the whole thing.  Only viable for small forests
 // func (f *Forest) ToString() string {
