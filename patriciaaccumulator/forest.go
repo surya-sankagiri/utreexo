@@ -857,94 +857,94 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 // 	f.addv2(adds)
 // }
 
-// // Add adds leaves to the forest.  This is the easy part.
-// func (f *Forest) addv2(adds []Leaf) {
+// Add adds leaves to the forest.  This is the easy part.
+func (f *Forest) addv2(adds []Leaf) {
 
-// 	for _, add := range adds {
+	for _, add := range adds {
 
-// 		f.lookup.add(f.maxLeaf, add.Hash)
+		f.lookup.add(f.maxLeaf, add.Hash)
 
-// 		f.maxLeaf++
-// 	}
-// 	// for _, add := range adds {
-// 	// 	// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
-// 	// 	f.positionMap[add.Mini()] = f.numLeaves
+		f.maxLeaf++
+	}
+	// for _, add := range adds {
+	// 	// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
+	// 	f.positionMap[add.Mini()] = f.numLeaves
 
-// 	// 	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
-// 	// 	pos := f.numLeaves
-// 	// 	n := add.Hash
-// 	// 	f.data.write(pos, n)
-// 	// 	for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
-// 	// 		// grab, pop, swap, hash, new
-// 	// 		root := f.data.read(rootPositions[h]) // grab
-// 	// 		//			fmt.Printf("grabbed %x from %d\n", root[:12], roots[h])
-// 	// 		n = parentHash(root, n)   // hash
-// 	// 		pos = parent(pos, f.rows) // rise
-// 	// 		f.data.write(pos, n)      // write
-// 	// 		//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
-// 	// 	}
-// 	// 	f.numLeaves++
-// 	// }
-// }
+	// 	rootPositions, _ := getRootsReverse(f.numLeaves, f.rows)
+	// 	pos := f.numLeaves
+	// 	n := add.Hash
+	// 	f.data.write(pos, n)
+	// 	for h := uint8(0); (f.numLeaves>>h)&1 == 1; h++ {
+	// 		// grab, pop, swap, hash, new
+	// 		root := f.data.read(rootPositions[h]) // grab
+	// 		//			fmt.Printf("grabbed %x from %d\n", root[:12], roots[h])
+	// 		n = parentHash(root, n)   // hash
+	// 		pos = parent(pos, f.rows) // rise
+	// 		f.data.write(pos, n)      // write
+	// 		//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
+	// 	}
+	// 	f.numLeaves++
+	// }
+}
 
-// // Modify changes the forest, adding and deleting leaves and updating internal nodes.
-// // Note that this does not modify in place!  All deletes occur simultaneous with
-// // adds, which show up on the right.
-// // Also, the deletes need there to be correct proof data, so you should first call Verify().
-// func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
+// Modify changes the forest, adding and deleting leaves and updating internal nodes.
+// Note that this does not modify in place!  All deletes occur simultaneous with
+// adds, which show up on the right.
+// Also, the deletes need there to be correct proof data, so you should first call Verify().
+func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 
-// 	numDels, numAdds := len(dels), len(adds)
-// 	delta := int64(numAdds - numDels) // watch 32/64 bit
+	numDels, numAdds := len(dels), len(adds)
+	delta := int64(numAdds - numDels) // watch 32/64 bit
 
-// 	if int64(f.numLeaves)+delta < 0 {
-// 		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
-// 			len(dels), f.numLeaves)
-// 	}
+	if int64(f.numLeaves)+delta < 0 {
+		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
+			len(dels), f.numLeaves)
+	}
 
-// 	if !checkSortedNoDupes(dels) { // check for sorted deletion slice
-// 		fmt.Printf("%v\n", dels)
-// 		return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
-// 	}
-// 	for _, a := range adds { // check for empty leaves
-// 		if a.Hash == empty {
-// 			return nil, fmt.Errorf("Can't add empty (all 0s) leaf to accumulator")
-// 		}
-// 	}
-// 	// remap to expand the forest if needed
-// 	for int64(f.numLeaves)+delta > int64(1<<f.rows) {
-// 		// fmt.Printf("current cap %d need %d\n",
-// 		// 1<<f.rows, f.numLeaves+delta)
-// 		err := f.reMap(f.rows + 1)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
+	if !checkSortedNoDupes(dels) { // check for sorted deletion slice
+		fmt.Printf("%v\n", dels)
+		return nil, fmt.Errorf("Deletions in incorrect order or duplicated")
+	}
+	for _, a := range adds { // check for empty leaves
+		if a.Hash == empty {
+			return nil, fmt.Errorf("Can't add empty (all 0s) leaf to accumulator")
+		}
+	}
+	// // remap to expand the forest if needed
+	// for int64(f.numLeaves)+delta > int64(1<<f.rows) {
+	// 	// fmt.Printf("current cap %d need %d\n",
+	// 	// 1<<f.rows, f.numLeaves+delta)
+	// 	err := f.reMap(f.rows + 1)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
-// 	// v3 should do the exact same thing as v2 now
-// 	err := f.removev5(dels)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	f.cleanup(uint64(numDels))
+	// v3 should do the exact same thing as v2 now
+	err := f.removev5(dels)
+	if err != nil {
+		return nil, err
+	}
+	// f.cleanup(uint64(numDels))
 
-// 	// save the leaves past the edge for undo
-// 	// dels hasn't been mangled by remove up above, right?
-// 	// BuildUndoData takes all the stuff swapped to the right by removev3
-// 	// and saves it in the order it's in, which should make it go back to
-// 	// the right place when it's swapped in reverse
-// 	ub := f.BuildUndoData(uint64(numAdds), dels)
+	// save the leaves past the edge for undo
+	// dels hasn't been mangled by remove up above, right?
+	// BuildUndoData takes all the stuff swapped to the right by removev3
+	// and saves it in the order it's in, which should make it go back to
+	// the right place when it's swapped in reverse
+	ub := f.BuildUndoData(uint64(numAdds), dels)
 
-// 	f.addv2(adds)
+	f.addv2(adds)
 
-// 	// fmt.Printf("done modifying block, added %d\n", len(adds))
-// 	// fmt.Printf("post add %s\n", f.ToString())
-// 	// for m, p := range f.positionMap {
-// 	// 	fmt.Printf("%x @%d\t", m[:4], p)
-// 	// }
-// 	// fmt.Printf("\n")
+	// fmt.Printf("done modifying block, added %d\n", len(adds))
+	// fmt.Printf("post add %s\n", f.ToString())
+	// for m, p := range f.positionMap {
+	// 	fmt.Printf("%x @%d\t", m[:4], p)
+	// }
+	// fmt.Printf("\n")
 
-// 	return ub, err
-// }
+	return ub, err
+}
 
 // // reMap changes the rows in the forest
 // func (f *Forest) reMap(destRows uint8) error {
