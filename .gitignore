@@ -9,3 +9,4 @@ cmd/simcmd/simcmd
 cmd/utreexoclient/utreexoclient
 cmd/utreexoserver/utreexoserver
 cmd/utreexoclient/pollardFile 
+bridgeserver
