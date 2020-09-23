@@ -559,7 +559,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		// for in-ram
 		f.data = new(ramForestData)
 	} else {
-		panic("We cannot yet create a forest from cache or memory")
+		// panic("We cannot yet create a forest from cache or memory")
 
 		if cached {
 			d := new(cacheForestData)
