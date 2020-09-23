@@ -460,81 +460,81 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 // For debugging and seeing what pollard is doing since there's already
 // a good toString method for  forest.
 //func (p *Pollard) toFull() (*Forest, error) {
-func (p *Pollard) toFull() (*Forest, error) {
+// func (p *Pollard) toFull() (*Forest, error) {
 
-	ff := NewForest(nil, false)
-	ff.rows = p.rows()
-	ff.numLeaves = p.numLeaves
-	ff.data = new(ramForestData)
-	ff.data.resize(2 << ff.rows)
-	if p.numLeaves == 0 {
-		return ff, nil
-	}
+// 	ff := NewForest(nil, false)
+// 	ff.rows = p.rows()
+// 	ff.numLeaves = p.numLeaves
+// 	ff.data = new(ramForestData)
+// 	ff.data.resize(2 << ff.rows)
+// 	if p.numLeaves == 0 {
+// 		return ff, nil
+// 	}
 
-	for i := uint64(0); i < (2<<ff.rows)-1; i++ {
-		_, sib, err := p.descendToPos(i)
-		if err != nil {
-			//	fmt.Printf("can't get pos %d: %s\n", i, err.Error())
-			continue
-			//			return nil, err
-		}
-		if sib[0] != nil {
-			ff.data.write(i, sib[0].data)
-			//	fmt.Printf("wrote leaf pos %d %04x\n", i, sib[0].data[:4])
-		}
+// 	for i := uint64(0); i < (2<<ff.rows)-1; i++ {
+// 		_, sib, err := p.descendToPos(i)
+// 		if err != nil {
+// 			//	fmt.Printf("can't get pos %d: %s\n", i, err.Error())
+// 			continue
+// 			//			return nil, err
+// 		}
+// 		if sib[0] != nil {
+// 			ff.data.write(i, sib[0].data)
+// 			//	fmt.Printf("wrote leaf pos %d %04x\n", i, sib[0].data[:4])
+// 		}
 
-	}
+// 	}
 
-	return ff, nil
-}
+// 	return ff, nil
+// }
 
-func (p *Pollard) ToString() string {
-	f, err := p.toFull()
-	if err != nil {
-		return err.Error()
-	}
-	return f.ToString()
-}
+// func (p *Pollard) ToString() string {
+// 	f, err := p.toFull()
+// 	if err != nil {
+// 		return err.Error()
+// 	}
+// 	return f.ToString()
+// }
 
-// equalToForest checks if the pollard has the same leaves as the forest.
-// doesn't check roots and stuff
-func (p *Pollard) equalToForest(f *Forest) bool {
-	if p.numLeaves != f.numLeaves {
-		return false
-	}
+// // equalToForest checks if the pollard has the same leaves as the forest.
+// // doesn't check roots and stuff
+// func (p *Pollard) equalToForest(f *Forest) bool {
+// 	if p.numLeaves != f.numLeaves {
+// 		return false
+// 	}
 
-	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
-		n, _, _, err := p.grabPos(leafpos)
-		if err != nil {
-			return false
-		}
-		if n.data != f.data.read(leafpos) {
-			fmt.Printf("leaf position %d pol %x != forest %x\n",
-				leafpos, n.data[:4], f.data.read(leafpos).Prefix())
-			return false
-		}
-	}
-	return true
-}
+// 	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
+// 		n, _, _, err := p.grabPos(leafpos)
+// 		if err != nil {
+// 			return false
+// 		}
+// 		if n.data != f.data.read(leafpos) {
+// 			fmt.Printf("leaf position %d pol %x != forest %x\n",
+// 				leafpos, n.data[:4], f.data.read(leafpos).Prefix())
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }
 
-// equalToForestIfThere checks if the pollard has the same leaves as the forest.
-// it's OK though for a leaf not to be there; only it can't exist and have
-// a different value than one in the forest
-func (p *Pollard) equalToForestIfThere(f *Forest) bool {
-	if p.numLeaves != f.numLeaves {
-		return false
-	}
+// // equalToForestIfThere checks if the pollard has the same leaves as the forest.
+// // it's OK though for a leaf not to be there; only it can't exist and have
+// // a different value than one in the forest
+// func (p *Pollard) equalToForestIfThere(f *Forest) bool {
+// 	if p.numLeaves != f.numLeaves {
+// 		return false
+// 	}
 
-	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
-		n, _, _, err := p.grabPos(leafpos)
-		if err != nil || n == nil {
-			continue // ignore grabPos errors / nils
-		}
-		if n.data != f.data.read(leafpos) {
-			fmt.Printf("leaf position %d pol %x != forest %x\n",
-				leafpos, n.data[:4], f.data.read(leafpos).Prefix())
-			return false
-		}
-	}
-	return true
-}
+// 	for leafpos := uint64(0); leafpos < f.numLeaves; leafpos++ {
+// 		n, _, _, err := p.grabPos(leafpos)
+// 		if err != nil || n == nil {
+// 			continue // ignore grabPos errors / nils
+// 		}
+// 		if n.data != f.data.read(leafpos) {
+// 			fmt.Printf("leaf position %d pol %x != forest %x\n",
+// 				leafpos, n.data[:4], f.data.read(leafpos).Prefix())
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }

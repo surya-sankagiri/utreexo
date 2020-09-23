@@ -18,21 +18,21 @@ func hashOne(l, r Hash, p uint64, hchan chan hashNpos) {
 	hchan <- hnp
 }
 
-func (f *Forest) hashRow(dirtpositions []uint64) error {
+// func (f *Forest) hashRow(dirtpositions []uint64) error {
 
-	hchan := make(chan hashNpos, 256) // probably don't need that big a buffer
+// 	hchan := make(chan hashNpos, 256) // probably don't need that big a buffer
 
-	for _, hp := range dirtpositions {
-		l := f.data.read(child(hp, f.rows))
-		r := f.data.read(child(hp, f.rows) | 1)
-		// fmt.Printf("hash pos %d l %x r %x\n", hp, l[:4], r[:4])
-		go hashOne(l, r, hp, hchan)
-	}
+// 	for _, hp := range dirtpositions {
+// 		l := f.data.read(child(hp, f.rows))
+// 		r := f.data.read(child(hp, f.rows) | 1)
+// 		// fmt.Printf("hash pos %d l %x r %x\n", hp, l[:4], r[:4])
+// 		go hashOne(l, r, hp, hchan)
+// 	}
 
-	for remaining := len(dirtpositions); remaining > 0; remaining-- {
-		hnp := <-hchan
-		f.data.write(hnp.pos, hnp.result)
-	}
+// 	for remaining := len(dirtpositions); remaining > 0; remaining-- {
+// 		hnp := <-hchan
+// 		f.data.write(hnp.pos, hnp.result)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
