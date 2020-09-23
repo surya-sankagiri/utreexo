@@ -85,6 +85,7 @@ func saveBridgeNodeData(
 			return err
 		}
 		panic("TODO implement this")
+		_ = forestFile
 		// err = forest.WriteForestToDisk(forestFile)
 		// if err != nil {
 		// 	return err
@@ -108,7 +109,8 @@ func saveBridgeNodeData(
 	if err != nil {
 		return err
 	}
-	panic("TODO implemnt this")
+	panic("TODO implement this")
+	_ = miscForestFile
 	// err = forest.WriteMiscData(miscForestFile)
 	// if err != nil {
 	// 	return err

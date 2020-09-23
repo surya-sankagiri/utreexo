@@ -72,6 +72,8 @@ func restoreForest(
 		return
 	}
 	panic("TODO implement this")
+	_ = forestFile
+	_ = miscForestFile
 	// forest, err = accumulator.RestoreForest(miscForestFile, forestFile, inRam, cached)
 	return
 }
