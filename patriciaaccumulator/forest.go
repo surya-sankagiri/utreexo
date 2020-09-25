@@ -109,11 +109,19 @@ type patriciaNode struct {
 }
 
 func (p *patriciaNode) min() uint64 {
+	// If a leaf node,
+	if p.left == p.right {
+		return p.midpoint
+	}
 	halfWidth := ((p.midpoint - 1) & p.midpoint) ^ p.midpoint
 	return p.midpoint - halfWidth
 }
 
 func (p *patriciaNode) max() uint64 {
+	// If a leaf node,
+	if p.left == p.right {
+		return p.midpoint + 1
+	}
 	halfWidth := ((p.midpoint - 1) & p.midpoint) ^ p.midpoint
 	return p.midpoint + halfWidth
 }
@@ -131,6 +139,9 @@ func (p *patriciaNode) inLeft(v uint64) bool {
 	if p.left == p.right {
 		panic("inLeft should not be called on leaf node")
 	}
+	if p.midpoint == 0 {
+		panic("inLeft should not be called on midpoint 0")
+	}
 	return p.min() <= v && v < p.midpoint
 }
 
@@ -147,13 +158,21 @@ func (p *patriciaNode) hash() Hash {
 
 func newPatriciaNode(child1, child2 patriciaNode) patriciaNode {
 
-	// TODO: DOes this work correctly when one of the children is a leaf?
-
 	var p patriciaNode
 
 	var leftChild, rightChild patriciaNode
 
-	if child1.min() < child2.max() {
+	if !(child1.max() <= child2.min() || child2.max() <= child1.min()) {
+		panic(fmt.Sprintf("Cannot combine nodes with overlapping ranges", child1.min(), child1.max(), child2.min(), child2.max()))
+	}
+	if !(child1.min() < child1.max()) {
+		panic(fmt.Sprintf("Node has wrong min and max", child1.min(), child1.max()))
+	}
+	if !(child2.min() < child2.max()) {
+		panic(fmt.Sprintf("Node has wrong min and max", child2.min(), child2.max()))
+	}
+	// Does child1 come first?
+	if child1.min() < child2.min() {
 		leftChild = child1
 		rightChild = child2
 	} else {
@@ -185,6 +204,30 @@ func newPatriciaNode(child1, child2 patriciaNode) patriciaNode {
 func (t *patriciaLookup) merge(other *patriciaLookup) {
 	for hash, node := range other.treeNodes {
 		t.treeNodes[hash] = node
+	}
+}
+
+// For debugging
+func (t *patriciaLookup) printAll() {
+
+	if t.stateRoot != empty {
+		t.printSubtree(t.stateRoot)
+	} else {
+		fmt.Println("empty tree")
+	}
+	fmt.Println("")
+
+}
+
+func (t *patriciaLookup) printSubtree(nodeHash Hash) {
+	node, _ := t.treeNodes[nodeHash]
+
+	if node.left == node.right {
+		fmt.Println("leafnode", "hash", nodeHash[:6], "midpoint", node.midpoint, "left", node.left[:6], "right", node.right[:6])
+	} else {
+		fmt.Println("hash", nodeHash[:6], "midpoint", node.midpoint, "left", node.left[:6], "right", node.right[:6])
+		t.printSubtree(node.left)
+		t.printSubtree(node.right)
 	}
 }
 
@@ -409,6 +452,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	}
 	node, ok := t.treeNodes[t.stateRoot]
+	fmt.Println("root midpoint is", node.midpoint)
 	if !ok {
 		return fmt.Errorf("state root %x not found", t.stateRoot)
 	}
@@ -465,6 +509,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	// The new state root is the hash of the last node added
 	t.stateRoot = nodeToAdd.hash()
+	fmt.Println("new root midpoint is", nodeToAdd.midpoint)
 
 	return nil
 }
@@ -509,13 +554,14 @@ func (t *patriciaLookup) remove(location uint64) {
 		neighborBranch = append(neighborBranch, neighbor)
 		// Update node down the tree
 		node = t.treeNodes[hash]
+		fmt.Printf("midpoint %d\n", node.midpoint)
 
 	} // End loop
 	mainBranch = append(mainBranch, node)
 
 	// Check that the leaf node we found has the right location
 	if node.midpoint != location {
-		panic("Found wrong location in remove")
+		panic(fmt.Sprintf("Found wrong location in remove, location is %d, but midpoint is %d", location, node.midpoint))
 	}
 
 	// Delete all nodes in the main branch, they are to be replaced
@@ -885,6 +931,8 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 func (f *Forest) addv2(adds []Leaf) error {
 
 	for _, add := range adds {
+
+		// f.lookup.printAll()
 
 		err := f.lookup.add(f.maxLeaf, add.Hash)
 		if err != nil {
