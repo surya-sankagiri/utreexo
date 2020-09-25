@@ -454,16 +454,21 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	return nil
 }
 
-// Based on add above: this code removes a location and returns the new root
+// Based on add above: this code removes a location
 func (t *patriciaLookup) remove(location uint64) {
 
 	// TODO: should state root be a property of patriciaLookup, and we avoid a single lookup representing multiple roots?
 	// TODO: Should the proof branch be the input, so this can be called without appatriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
+	empty := Hash{}
+	if t.stateRoot == empty {
+		panic("State root is empty hash")
+	}
+
 	node, ok := t.treeNodes[t.stateRoot]
 	if !ok {
-		panic("Could not find root")
+		panic("Could not find root in nodes")
 	}
 
 	var hash Hash
