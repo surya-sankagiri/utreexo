@@ -537,7 +537,11 @@ func (t *patriciaLookup) remove(location uint64) {
 // Delete the leaves at the dels location for the trie forest
 func (f *Forest) removev5(dels []uint64) error {
 
+	if f.numLeaves < uint64(len(dels)) {
+		panic(fmt.Sprintf("Attempting to delete %v nodes, only %v exist", len(dels), f.numLeaves))
+	}
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
+
 	// check that all dels are before the maxLeaf
 	for _, dpos := range dels {
 		if dpos > f.maxLeaf {
@@ -870,6 +874,7 @@ func (f *Forest) addv2(adds []Leaf) {
 		f.lookup.add(f.maxLeaf, add.Hash)
 
 		f.maxLeaf++
+		f.numLeaves++
 	}
 	// for _, add := range adds {
 	// 	// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
@@ -899,9 +904,17 @@ func (f *Forest) addv2(adds []Leaf) {
 func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 
 	numDels, numAdds := len(dels), len(adds)
-	delta := int64(numAdds - numDels) // watch 32/64 bit
+	// delta := int64(numAdds - numDels) // watch 32/64 bit
 
-	if int64(f.numLeaves)+delta < 0 {
+	fmt.Printf("starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
+
+	// Changing this
+	// if int64(f.numLeaves)+delta < 0 {
+	// 	return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
+	// 		len(dels), f.numLeaves)
+	// }
+	//
+	if int(f.numLeaves) < len(dels) {
 		return nil, fmt.Errorf("can't delete %d leaves, only %d exist",
 			len(dels), f.numLeaves)
 	}
