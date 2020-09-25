@@ -53,7 +53,7 @@ type Forest struct {
 	// might not be needed at all with a slice.
 
 	// It doesn't matter too much how much the forest data is structured, since we are focusing on improving proof sizes
-	positionMap map[MiniHash]uint64
+	// positionMap map[MiniHash]uint64
 	// Inverse of forestMap for leaves.
 
 	lookup patriciaLookup
@@ -176,11 +176,11 @@ func newPatriciaNode(child1, child2 patriciaNode) patriciaNode {
 	return p
 }
 
-func NewPatriciaLookup() *patriciaLookup {
-	t := new(patriciaLookup)
-	t.treeNodes = make(map[Hash]patriciaNode)
-	return t
-}
+// func NewPatriciaLookup() *patriciaLookup {
+// 	t := new(patriciaLookup)
+// 	t.treeNodes = make(map[Hash]patriciaNode)
+// 	return t
+// }
 
 func (t *patriciaLookup) merge(other *patriciaLookup) {
 	for hash, node := range other.treeNodes {
@@ -386,10 +386,28 @@ func filterDelete(a []Hash, val Hash) {
 // Adds a hash at a particular location and returns the new state root
 func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
-	// TODO: Should the proof branch be the input, so this can be called without appatriciaLookup by a stateless node
+	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
+
+	// Add the new leaf node
+	newLeafNode := patriciaNode{toAdd, toAdd, location}
+	t.treeNodes[newLeafNode.hash()] = newLeafNode
 	t.leafLocations[toAdd] = location
 
+	fmt.Println("in add", location, toAdd, t.stateRoot, len(t.treeNodes))
+
+	if t.stateRoot == empty {
+		// If the patriciaLookup is empty (has empty root), treeNodes should be empty
+		if len(t.treeNodes) > 1 {
+			return fmt.Errorf("stateRoot empty, but treeNodes was populated")
+		}
+
+		// The patriciaLookup is empty, we make a single root and return
+		t.stateRoot = newLeafNode.hash()
+
+		return nil
+
+	}
 	node, ok := t.treeNodes[t.stateRoot]
 	if !ok {
 		return fmt.Errorf("state root %x not found", t.stateRoot)
@@ -427,9 +445,6 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	} // End loop
 
-	// Add the new leaf node
-	newLeafNode := patriciaNode{toAdd, toAdd, location}
-	t.treeNodes[newLeafNode.hash()] = newLeafNode
 	// Combine leaf node with its new sibling
 	nodeToAdd := newPatriciaNode(newLeafNode, node)
 	t.treeNodes[nodeToAdd.hash()] = nodeToAdd
@@ -584,7 +599,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 	}
 
 	f.data.resize(1)
-	f.positionMap = make(map[MiniHash]uint64)
+	// f.positionMap = make(map[MiniHash]uint64)
 	f.lookup = patriciaLookup{Hash{}, make(map[Hash]patriciaNode), make(map[Hash]uint64)}
 	return f
 }
@@ -867,15 +882,19 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 // }
 
 // Add adds leaves to the forest.  This is the easy part.
-func (f *Forest) addv2(adds []Leaf) {
+func (f *Forest) addv2(adds []Leaf) error {
 
 	for _, add := range adds {
 
-		f.lookup.add(f.maxLeaf, add.Hash)
+		err := f.lookup.add(f.maxLeaf, add.Hash)
+		if err != nil {
+			return err
+		}
 
 		f.maxLeaf++
 		f.numLeaves++
 	}
+	return nil
 	// for _, add := range adds {
 	// 	// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
 	// 	f.positionMap[add.Mini()] = f.numLeaves
@@ -939,6 +958,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	// }
 
 	// v3 should do the exact same thing as v2 now
+	fmt.Printf("Beginning Deletes\n")
 	err := f.removev5(dels)
 	if err != nil {
 		return nil, err
@@ -952,7 +972,11 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	// the right place when it's swapped in reverse
 	ub := f.BuildUndoData(uint64(numAdds), dels)
 
-	f.addv2(adds)
+	fmt.Printf("Beginning Adds\n")
+	err = f.addv2(adds)
+	if err != nil {
+		return nil, err
+	}
 
 	// fmt.Printf("done modifying block, added %d\n", len(adds))
 	// fmt.Printf("post add %s\n", f.ToString())
@@ -1211,8 +1235,8 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 // Stats :
 func (f *Forest) Stats() string {
 
-	s := fmt.Sprintf("numleaves: %d hashesever: %d posmap: %d forest: %d\n",
-		f.numLeaves, f.HistoricHashes, len(f.positionMap), f.data.size())
+	s := fmt.Sprintf("numleaves: %d hashesever: %d forest: %d\n",
+		f.numLeaves, f.HistoricHashes, f.data.size())
 
 	s += fmt.Sprintf("\thashT: %.2f remT: %.2f (of which MST %.2f) proveT: %.2f",
 		f.TimeInHash.Seconds(), f.TimeRem.Seconds(), f.TimeMST.Seconds(),
