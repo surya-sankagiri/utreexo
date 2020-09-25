@@ -126,6 +126,8 @@ func (bp *BatchProof) ToBytes() []byte {
 	// first write the number of Targets (4 byte uint32)
 	numTargets := uint32(len(bp.Targets))
 	if numTargets == 0 {
+		// TODO this should instead return some representation of an "empty proof"
+
 		return nil
 	}
 	err := binary.Write(&buf, binary.BigEndian, numTargets)
@@ -135,7 +137,8 @@ func (bp *BatchProof) ToBytes() []byte {
 	// then write the number of midpoints (4 byte uint32)
 	numMidpoints := uint32(len(bp.midpoints))
 	if numMidpoints == 0 {
-		panic("non-zero Targets but no midpoints.")
+		// TODO its actually possible, i think if we have a single element tree, then there is one target and nothing else
+		// panic("non-zero Targets but no midpoints.")
 	}
 	err = binary.Write(&buf, binary.BigEndian, numMidpoints)
 	if err != nil {
