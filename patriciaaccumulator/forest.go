@@ -252,8 +252,6 @@ func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 // 	 all midpoints on the main branch from the root to (Just before?) the proved leaf
 //   all hashes of nodes that are neighbors of nodes on the main branch, in order
 func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
-	// TODO consider replacing the return proof, error with just returning a proof
-	// If an error happens, we should just quit immediately rather than handling it
 
 	var proof PatriciaProof
 	proof.midpoints = make([]uint64, 0, 64)
