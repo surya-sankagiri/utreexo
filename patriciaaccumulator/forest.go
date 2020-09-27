@@ -619,16 +619,16 @@ func (t *patriciaLookup) remove(location uint64) {
 
 }
 
-// Delete the leaves at the dels location for the trie forest
-func (f *Forest) removev5(dels []uint64) error {
+// Delete the leaves at the locations for the trie forest
+func (f *Forest) removev5(locations []uint64) error {
 
-	if f.numLeaves < uint64(len(dels)) {
-		panic(fmt.Sprintf("Attempting to delete %v nodes, only %v exist", len(dels), f.numLeaves))
+	if f.numLeaves < uint64(len(locations)) {
+		panic(fmt.Sprintf("Attempting to delete %v nodes, only %v exist", len(locations), f.numLeaves))
 	}
-	nextNumLeaves := f.numLeaves - uint64(len(dels))
+	nextNumLeaves := f.numLeaves - uint64(len(locations))
 
-	// check that all dels are before the maxLeaf
-	for _, dpos := range dels {
+	// check that all locations are before the maxLeaf
+	for _, dpos := range locations {
 		if dpos > f.maxLeaf {
 			return fmt.Errorf(
 				"Trying to delete leaf at %d, beyond max %d", dpos, f.maxLeaf)
