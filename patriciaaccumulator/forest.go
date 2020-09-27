@@ -366,6 +366,8 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 	for i := 1; i < len(individualProofs); i++ {
 		proofCurrent := individualProofs[i]
 		proofPrev := individualProofs[i-1]
+		// fmt.Println(proofCurrent)
+		// fmt.Println(proofPrev)
 		// Iterate through i and i-1 to find the fork
 		for j, midpoint := range proofCurrent.midpoints {
 			if midpoint != proofPrev.midpoints[j] {
@@ -373,7 +375,7 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 				// Delete the hashes at j-1 from both
 				// filterDelete(hashes, proofCurrent.hashes[j-1])
 				filterDelete(hashes, proofPrev.hashes[j-1])
-				// Now add the hashes from proof A from after the fork
+				// Now add the hashes from currentProof from after the fork
 				hashes = append(hashes, proofCurrent.hashes[j:]...)
 				break
 
