@@ -231,19 +231,20 @@ func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 	return out
 }
 
-func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) PatriciaProof {
-	var proof PatriciaProof
-	midpoints = midpoints[:len(midpoints)-1] // the last midpoint is the target
-	//reverse the order of midpoints and neighborHashes so as to include trees first
-	for i, j := 0, len(midpoints)-1; i < j; i, j = i+1, j-1 {
-		midpoints[i], midpoints[j] = midpoints[j], midpoints[i]
-		neighborHashes[i], neighborHashes[j] = neighborHashes[j], neighborHashes[i]
-	}
-	proof.target = target
-	proof.midpoints = midpoints
-	proof.hashes = neighborHashes
-	return proof
-}
+// I changed this since the other code assumes the root is first, we might change back at some point -Bolton
+// func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) PatriciaProof {
+// 	var proof PatriciaProof
+// 	midpoints = midpoints[:len(midpoints)-1] // the last midpoint is the target
+// 	//reverse the order of midpoints and neighborHashes so as to include trees first
+// 	for i, j := 0, len(midpoints)-1; i < j; i, j = i+1, j-1 {
+// 		midpoints[i], midpoints[j] = midpoints[j], midpoints[i]
+// 		neighborHashes[i], neighborHashes[j] = neighborHashes[j], neighborHashes[i]
+// 	}
+// 	proof.target = target
+// 	proof.midpoints = midpoints
+// 	proof.hashes = neighborHashes
+// 	return proof
+// }
 
 // RetrieveProof Creates a proof for a single target against a state root
 // The proof consists of:
@@ -255,11 +256,13 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	// If an error happens, we should just quit immediately rather than handling it
 
 	var proof PatriciaProof
+	proof.midpoints = make([]uint64, 0, 64)
+	proof.hashes = make([]Hash, 0, 64)
 	var node patriciaNode
 	var nodeHash Hash
 	var neighborHash Hash
-	var midpoints = make([]uint64, 0, 64)
-	var neighborHashes = make([]Hash, 0, 64)
+	// var midpoints = make([]uint64, 0, 64)
+	// var neighborHashes = make([]Hash, 0, 64)
 	var ok bool
 	// Start at the root of the tree
 	node, ok = t.treeNodes[t.stateRoot]
@@ -268,9 +271,9 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	}
 	// Discover the path to the leaf
 	for {
-		midpoints = append(midpoints, node.midpoint)
+		proof.midpoints = append(proof.midpoints, node.midpoint)
 		if !node.inRange(target) {
-			// The target location is not in range; this is an arror
+			// The target location is not in range; this is an error
 			// REMARK (SURYA): The current system has no use for proof of non-existence, nor has the means to create one
 			return proof, fmt.Errorf("target location %d not found", target)
 		}
@@ -280,13 +283,13 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 		if node.left == node.right {
 			// REMARK (SURYA): We do not check whether the hash corresponds to the hash of a leaf
 			//perform a sanity check here
-			if len(midpoints) != len(neighborHashes)+1 {
+			if len(proof.midpoints) != len(proof.hashes)+1 {
 				panic("# midpoints not equal to # hashes")
 			}
 			if node.midpoint != target {
 				panic("midpoint of leaf not equal to target")
 			}
-			proof = ConstructProof(target, midpoints, neighborHashes)
+			// proof = ConstructProof(target, midpoints, neighborHashes)
 			return proof, nil
 		}
 		if node.inLeft(target) {
@@ -306,7 +309,7 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 		if !ok {
 			return proof, fmt.Errorf("Patricia Node %x not found", neighborHash)
 		}
-		neighborHashes = append(neighborHashes, neighborHash)
+		proof.hashes = append(proof.hashes, neighborHash)
 	}
 }
 
