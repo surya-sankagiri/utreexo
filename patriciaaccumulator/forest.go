@@ -628,13 +628,13 @@ func (f *Forest) removev5(locations []uint64) error {
 	nextNumLeaves := f.numLeaves - uint64(len(locations))
 
 	// check that all locations are before the maxLeaf
-	for _, dpos := range locations {
-		if dpos > f.maxLeaf {
+	for _, location := range locations {
+		if location > f.maxLeaf {
 			return fmt.Errorf(
-				"Trying to delete leaf at %d, beyond max %d", dpos, f.maxLeaf)
+				"Trying to delete leaf at %d, beyond max %d", location, f.maxLeaf)
 		}
 
-		f.lookup.remove(dpos)
+		f.lookup.remove(location)
 	}
 
 	f.numLeaves = nextNumLeaves
