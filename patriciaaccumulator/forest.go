@@ -166,7 +166,7 @@ func newPatriciaNode(child1, child2 patriciaNode) patriciaNode {
 		panic(fmt.Sprintf("Cannot combine nodes with overlapping ranges %d to %d and %d to %d", child1.min(), child1.max(), child2.min(), child2.max()))
 	}
 	if !(child1.min() < child1.max()) {
-		panic(fmt.Sprintf("Node has wrong min and max", child1.min(), child1.max()))
+		panic(fmt.Sprintf("Node has min (%d) not less than max (%d)", child1.min(), child1.max()))
 	}
 	if !(child2.min() < child2.max()) {
 		panic(fmt.Sprintf("Node has min (%d) not less than max (%d)", child2.min(), child2.max()))
