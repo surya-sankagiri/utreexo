@@ -580,6 +580,15 @@ func (t *patriciaLookup) remove(location uint64) {
 		delete(t.treeNodes, node.hash())
 	}
 
+	// If there are no elements in the neighbor nodes, the leaf we deleted was the root
+	// The root becomes empty
+	if len(neighborBranch) == 0 {
+		t.stateRoot = empty
+		fmt.Println("new root hash is", empty[:6])
+
+		return
+	}
+
 	// If there is one element in the neighbor nodes, the leaf we deleted was a child of the root
 	// The neighbor becomes the new root.
 	if len(neighborBranch) == 1 {
