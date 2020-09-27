@@ -642,8 +642,7 @@ func (f *Forest) removev5(dels []uint64) error {
 	return nil
 }
 
-// NewForest: Makes a new forest
-//
+// NewForest Makes a new forest
 func NewForest(forestFile *os.File, cached bool) *Forest {
 	f := new(Forest)
 	f.numLeaves = 0
