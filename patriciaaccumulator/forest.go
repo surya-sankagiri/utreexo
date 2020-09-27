@@ -390,6 +390,7 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 
 }
 
+// ProveBatch Returns a BatchProof proving a list of hashes against a forest
 func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
 	targets := make([]uint64, len(hashes))
 	for i, hash := range hashes {
