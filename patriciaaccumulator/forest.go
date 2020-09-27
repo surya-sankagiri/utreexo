@@ -323,6 +323,11 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 
 	for _, target := range targets {
 		proof, _ := t.RetrieveProof(target)
+
+		if proof.midpoints[0] != t.treeNodes[t.stateRoot].midpoint {
+			panic("Wrong root midpoint")
+		}
+
 		individualProofs = append(individualProofs, proof)
 	}
 
