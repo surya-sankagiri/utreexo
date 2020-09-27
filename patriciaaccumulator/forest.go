@@ -529,6 +529,9 @@ func (t *patriciaLookup) remove(location uint64) {
 	// TODO: Should the proof branch be the input, so this can be called without appatriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
+	fmt.Println("Removing at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting. Tree is:")
+	fmt.Print(t)
+
 	empty := Hash{}
 	if t.stateRoot == empty {
 		panic("State root is empty hash")
@@ -536,7 +539,7 @@ func (t *patriciaLookup) remove(location uint64) {
 
 	node, ok := t.treeNodes[t.stateRoot]
 	if !ok {
-		panic("Could not find root in nodes")
+		panic(fmt.Sprint("Could not find root ", t.stateRoot[:6], " in nodes"))
 	}
 
 	var hash Hash
