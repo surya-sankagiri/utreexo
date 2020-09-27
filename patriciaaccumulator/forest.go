@@ -996,7 +996,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	numDels, numAdds := len(dels), len(adds)
 	// delta := int64(numAdds - numDels) // watch 32/64 bit
 
-	fmt.Printf("starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
+	fmt.Printf("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
 
 	// Changing this
 	// if int64(f.numLeaves)+delta < 0 {
