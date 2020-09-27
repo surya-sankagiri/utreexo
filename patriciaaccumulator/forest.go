@@ -615,6 +615,8 @@ func (t *patriciaLookup) remove(location uint64) {
 
 	// The new state root is the hash of the last node added
 	t.stateRoot = nodeToAdd.hash()
+	fmt.Println("new root hash is", t.stateRoot[:6])
+
 }
 
 // Delete the leaves at the dels location for the trie forest
