@@ -1232,7 +1232,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 // 	fmt.Println("Done restoring forest")
 
 // 	// for cacheForestData the `hashCount` field gets
-// 	// set throught the size() call.
+// 	// set through the size() call.
 // 	f.data.size()
 
 // 	return f, nil
