@@ -211,10 +211,9 @@ func (t *patriciaLookup) merge(other *patriciaLookup) {
 func (t *patriciaLookup) String() string {
 
 	if t.stateRoot != empty {
-		return t.subtreeString(t.stateRoot) + "\n"
-	} else {
-		return "empty tree"
+		return fmt.Sprint("Root is: ", t.stateRoot[:6], "\n", t.subtreeString(t.stateRoot), "\n")
 	}
+	return "empty tree"
 }
 
 func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
@@ -223,9 +222,9 @@ func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 	out := ""
 
 	if node.left == node.right {
-		return fmt.Sprintf("leafnode", "hash", nodeHash[:6], "midpoint", node.midpoint, "left", node.left[:6], "right", node.right[:6], "\n")
+		return fmt.Sprint("leafnode ", "hash ", nodeHash[:6], " midpoint ", node.midpoint, " left ", node.left[:6], " right ", node.right[:6], "\n")
 	}
-	out += fmt.Sprintf("hash", nodeHash[:6], "midpoint", node.midpoint, "left", node.left[:6], "right", node.right[:6], "\n")
+	out += fmt.Sprint("hash ", nodeHash[:6], " midpoint ", node.midpoint, " left ", node.left[:6], " right ", node.right[:6], "\n")
 	out += t.subtreeString(node.left)
 	out += t.subtreeString(node.right)
 
