@@ -358,7 +358,6 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 	sortRemoveDuplicates(midpoints)
 	// TODO compress this list
 
-	// TODO segfault?
 	hashes := make([]Hash, len(individualProofs[0].hashes))
 	copy(hashes, individualProofs[0].hashes)
 
