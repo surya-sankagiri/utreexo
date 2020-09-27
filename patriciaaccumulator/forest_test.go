@@ -47,6 +47,9 @@ func TestForestAddDel(t *testing.T) {
 	}
 }
 
+// TODO: Test that longer branches have longer proofs
+// also, test that more disjoint branches make a longer batchproof
+
 func TestForestFixed(t *testing.T) {
 	f := NewForest(nil, false)
 	numadds := 5
