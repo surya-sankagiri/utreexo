@@ -445,7 +445,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	t.treeNodes[newLeafNode.hash()] = newLeafNode
 	t.leafLocations[toAdd] = location
 
-	fmt.Println("in add", location, toAdd, t.stateRoot, len(t.treeNodes))
+	fmt.Println("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting")
 
 	if t.stateRoot == empty {
 		// If the patriciaLookup is empty (has empty root), treeNodes should be empty
@@ -460,7 +460,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	}
 	node, ok := t.treeNodes[t.stateRoot]
-	fmt.Println("root midpoint is", node.midpoint)
+	fmt.Println("starting root midpoint is", node.midpoint)
 	if !ok {
 		return fmt.Errorf("state root %x not found", t.stateRoot)
 	}
