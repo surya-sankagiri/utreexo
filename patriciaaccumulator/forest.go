@@ -208,27 +208,28 @@ func (t *patriciaLookup) merge(other *patriciaLookup) {
 }
 
 // For debugging
-func (t *patriciaLookup) printAll() {
+func (t *patriciaLookup) String() string {
 
 	if t.stateRoot != empty {
-		t.printSubtree(t.stateRoot)
+		return t.subtreeString(t.stateRoot) + "\n"
 	} else {
-		fmt.Println("empty tree")
+		return "empty tree"
 	}
-	fmt.Println("")
-
 }
 
-func (t *patriciaLookup) printSubtree(nodeHash Hash) {
+func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 	node, _ := t.treeNodes[nodeHash]
 
+	out := ""
+
 	if node.left == node.right {
-		fmt.Println("leafnode", "hash", nodeHash[:6], "midpoint", node.midpoint, "left", node.left[:6], "right", node.right[:6])
+		return fmt.Sprintf("leafnode", "hash", nodeHash[:6], "midpoint", node.midpoint, "left", node.left[:6], "right", node.right[:6], "\n")
 	} else {
-		fmt.Println("hash", nodeHash[:6], "midpoint", node.midpoint, "left", node.left[:6], "right", node.right[:6])
-		t.printSubtree(node.left)
-		t.printSubtree(node.right)
+		out += fmt.Sprintf("hash", nodeHash[:6], "midpoint", node.midpoint, "left", node.left[:6], "right", node.right[:6], "\n")
+		out += t.subtreeString(node.left)
+		out += t.subtreeString(node.right)
 	}
+	return out
 }
 
 func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) PatriciaProof {
