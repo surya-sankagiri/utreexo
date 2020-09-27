@@ -1041,7 +1041,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	// BuildUndoData takes all the stuff swapped to the right by removev3
 	// and saves it in the order it's in, which should make it go back to
 	// the right place when it's swapped in reverse
-	ub := f.BuildUndoData(uint64(numAdds), dels)
+	// ub := f.BuildUndoData(uint64(numAdds), dels)
 
 	fmt.Printf("Beginning Adds\n")
 	err = f.addv2(adds)
@@ -1056,7 +1056,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	// }
 	// fmt.Printf("\n")
 
-	return ub, err
+	return nil, err
 }
 
 // // reMap changes the rows in the forest
