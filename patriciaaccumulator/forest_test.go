@@ -7,6 +7,7 @@ import (
 
 func TestDeleteReverseOrder(t *testing.T) {
 	f := NewForest(nil, false)
+
 	leaf1 := Leaf{Hash: Hash{1}}
 	leaf2 := Leaf{Hash: Hash{2}}
 	_, err := f.Modify([]Leaf{leaf1, leaf2}, nil)

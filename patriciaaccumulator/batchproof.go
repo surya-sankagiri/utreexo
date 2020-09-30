@@ -29,6 +29,7 @@ type BatchProof struct {
 	// We then have to fill in the hashes of the children we proceed in order left to right
 	// 1. when a hash is a leaf, we have that hash
 	// 2. when we don't have a leaf, we take the next element of hashes, and we order hashes so that this element is the correct next one.
+	// TODO in the more efficient version, this is a slice of uint8s representing the branching off points.
 }
 
 // PatriciaProof is a potential replacement structure for a single proof

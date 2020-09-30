@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	// "github.com/surya-sankagiri/utreexo/accumulator"
+	accumulator "github.com/surya-sankagiri/utreexo/accumulator"
 
-	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 	"github.com/surya-sankagiri/utreexo/util"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -118,8 +117,10 @@ func BuildProofs(
 		// convert UData struct to bytes
 		b := ud.ToBytes()
 
+		proofData := ud.AccProof.ToBytes()
+
 		// In theory, all I have to do is to pipe height and len(b) to a file
-		if _, err := datafile.WriteString(fmt.Sprintf("%d, %d \n", height, len(b))); err != nil {
+		if _, err := datafile.WriteString(fmt.Sprintf("%d, %d \n", height, len(proofData))); err != nil {
 			log.Println(err)
 		}
 

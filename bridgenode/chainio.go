@@ -5,7 +5,9 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
+		accumulator "github.com/surya-sankagiri/utreexo/accumulator"
+
+
 	"github.com/surya-sankagiri/utreexo/util"
 )
 

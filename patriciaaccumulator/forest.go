@@ -350,16 +350,25 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 	individualProofs, _ := t.RetrieveListProofs(targets)
 
 	var midpoints = make([]uint64, 0, 0)
-
+	var midpointsSet = make(map[uint64]bool)
+	// Collect all midpoints in a set
 	for _, proof := range individualProofs {
-		midpoints = append(midpoints, proof.midpoints...)
+		for _, midpoint := range proof.midpoints {
+			midpointsSet[midpoint] = true
+		}
+	}
+	// Put set into list form
+	for k := range midpointsSet {
+		midpoints = append(midpoints, k)
 	}
 
-	sortRemoveDuplicates(midpoints)
+	sort.Slice(midpoints, func(i, j int) bool { return midpoints[i] < midpoints[j] })
 	// TODO compress this list
 
-	hashes := make([]Hash, len(individualProofs[0].hashes))
-	copy(hashes, individualProofs[0].hashes)
+	hashesToDelete := make(map[Hash]bool)
+
+	allHashes := make([]Hash, len(individualProofs[0].hashes))
+	copy(allHashes, individualProofs[0].hashes)
 
 	// To compress this data into a BatchProof we must remove
 	// the hash children of nodes which occur in two individual proofs but fork
@@ -374,12 +383,20 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 				// Fork found
 				// Delete the hashes at j-1 from both
 				// filterDelete(hashes, proofCurrent.hashes[j-1])
-				filterDelete(hashes, proofPrev.hashes[j-1])
+				hashesToDelete[proofPrev.hashes[j-1]] = true
 				// Now add the hashes from currentProof from after the fork
-				hashes = append(hashes, proofCurrent.hashes[j:]...)
+				allHashes = append(allHashes, proofCurrent.hashes[j:]...)
 				break
 
 			}
+		}
+	}
+
+	// Delete deletable hashes
+	hashes := make([]Hash, 0, 0)
+	for _, hash := range allHashes {
+		if !hashesToDelete[hash] {
+			hashes = append(hashes, hash)
 		}
 	}
 
@@ -400,22 +417,22 @@ func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
 	return f.lookup.RetrieveBatchProof(targets), nil
 }
 
-// Helper function that sorts a slice and removes duplicate
-func sortRemoveDuplicates(a []uint64) {
-	sort.Slice(a, func(i, j int) bool { return a[i] < a[j] })
+// // Helper function that sorts a slice and removes duplicate
+// func sortRemoveDuplicates(a []uint64) {
+// 	sort.Slice(a, func(i, j int) bool { return a[i] < a[j] })
 
-	for i := 0; i < len(a)-1; i++ {
-		if a[i] == a[i+1] {
-			// From https://yourbasic.org/golang/delete-element-slice/
-			// Remove the element at index i from a.
-			copy(a[i:], a[i+1:]) // Shift a[i+1:] left one index.
-			// a[len(a)-1] = ""     // Erase last element (write zero value).
-			a = a[:len(a)-1] // Truncate slice.
+// 	for i := 0; i < len(a)-1; i++ {
+// 		if a[i] == a[i+1] {
+// 			// From https://yourbasic.org/golang/delete-element-slice/
+// 			// Remove the element at index i from a.
+// 			copy(a[i:], a[i+1:]) // Shift a[i+1:] left one index.
+// 			// a[len(a)-1] = ""     // Erase last element (write zero value).
+// 			a = a[:len(a)-1] // Truncate slice.
 
-			i--
-		}
-	}
-}
+// 			i--
+// 		}
+// 	}
+// }
 
 // Helper function removes all copies of a specific value from a slice
 func filterDelete(a []Hash, val Hash) {
@@ -445,7 +462,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	t.treeNodes[newLeafNode.hash()] = newLeafNode
 	t.leafLocations[toAdd] = location
 
-	fmt.Println("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting")
+	// fmt.Println("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting")
 
 	if t.stateRoot == empty {
 		// If the patriciaLookup is empty (has empty root), treeNodes should be empty
@@ -460,7 +477,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	}
 	node, ok := t.treeNodes[t.stateRoot]
-	fmt.Println("starting root midpoint is", node.midpoint)
+	// fmt.Println("starting root midpoint is", node.midpoint)
 	if !ok {
 		return fmt.Errorf("state root %x not found", t.stateRoot)
 	}
@@ -517,7 +534,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	// The new state root is the hash of the last node added
 	t.stateRoot = nodeToAdd.hash()
-	fmt.Println("new root midpoint is", nodeToAdd.midpoint)
+	// fmt.Println("new root midpoint is", nodeToAdd.midpoint)
 
 	return nil
 }
@@ -529,8 +546,8 @@ func (t *patriciaLookup) remove(location uint64) {
 	// TODO: Should the proof branch be the input, so this can be called without appatriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
-	fmt.Println("Removing at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting. Tree is:")
-	fmt.Print(t)
+	// fmt.Println("Removing at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting. Tree is:")
+	// fmt.Print(t)
 
 	empty := Hash{}
 	if t.stateRoot == empty {
@@ -565,7 +582,7 @@ func (t *patriciaLookup) remove(location uint64) {
 		neighborBranch = append(neighborBranch, neighbor)
 		// Update node down the tree
 		node = t.treeNodes[hash]
-		fmt.Printf("midpoint %d\n", node.midpoint)
+		// fmt.Printf("midpoint %d\n", node.midpoint)
 
 	} // End loop
 	mainBranch = append(mainBranch, node)
@@ -584,7 +601,7 @@ func (t *patriciaLookup) remove(location uint64) {
 	// The root becomes empty
 	if len(neighborBranch) == 0 {
 		t.stateRoot = empty
-		fmt.Println("new root hash is", empty[:6])
+		// fmt.Println("new root hash is", empty[:6])
 
 		return
 	}
@@ -593,7 +610,7 @@ func (t *patriciaLookup) remove(location uint64) {
 	// The neighbor becomes the new root.
 	if len(neighborBranch) == 1 {
 		t.stateRoot = neighborBranch[0].hash()
-		fmt.Println("new root hash is", t.stateRoot[:6])
+		// fmt.Println("new root hash is", t.stateRoot[:6])
 
 		return
 	}
@@ -615,7 +632,7 @@ func (t *patriciaLookup) remove(location uint64) {
 
 	// The new state root is the hash of the last node added
 	t.stateRoot = nodeToAdd.hash()
-	fmt.Println("new root hash is", t.stateRoot[:6])
+	// fmt.Println("new root hash is", t.stateRoot[:6])
 
 }
 
