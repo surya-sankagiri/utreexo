@@ -108,6 +108,16 @@ type patriciaNode struct {
 	midpoint uint64 // The midpoint of the binary interval represented by the common
 }
 
+// Utility to determine of one midpoint range contains another
+func subset(a, b uint64) bool {
+	//
+	halfWidthA := ((a - 1) & a) ^ a
+	halfWidthB := ((b - 1) & b) ^ b
+
+	return (b-halfWidthB <= a-halfWidthA) && (a+halfWidthA <= b-halfWidthB)
+
+}
+
 func (p *patriciaNode) min() uint64 {
 	// If a leaf node,
 	if p.left == p.right {
