@@ -431,23 +431,24 @@ func (t *patriciaLookup) RetrieveBatchProofShort(targets []uint64) BatchProof {
 	}
 
 	// A slice of proofs of individual elements
+	// RetrieveListProofs creates a list of individual proofs for targets, **in sorted order**
 	individualProofs, _ := t.RetrieveListProofs(targets)
-
-	var midpoint_widths = make([]uint8, 0, 0)
+	// midpointsWidth is a slice that will go into the BatchProof; it will replace the slice of midpoints
+	var midpointsWidth = make([]uint64, 0, 0)
+	// midpointsSet is used to remove repeated entries
 	var midpointsSet = make(map[uint64]bool)
-	// Collect all midpoints in a set
+	var width uint64
+	// Add midpoints, one individualProof at a time, to midpointsWidth, and use midpointsSet to remove redundancies
 	for _, proof := range individualProofs {
 		for _, midpoint := range proof.midpoints {
-			midpointsSet[midpoint] = true
+			//check if this midpoint has already been encountered
+			if _, ok := midpointsSet[midpoint]; !ok {
+				midpointsSet[midpoint] = true
+				width = calculateWidth(midpoint)
+				midpointsWidth = append(midpointsWidth, width)
+			}
 		}
 	}
-	// Put set into list form
-	for k := range midpointsSet {
-		midpoints = append(midpoints, k)
-	}
-
-	sort.Slice(midpoints, func(i, j int) bool { return midpoints[i] < midpoints[j] })
-	// TODO compress this list
 
 	hashesToDelete := make(map[Hash]bool)
 
@@ -471,7 +472,6 @@ func (t *patriciaLookup) RetrieveBatchProofShort(targets []uint64) BatchProof {
 				// Now add the hashes from currentProof from after the fork
 				allHashes = append(allHashes, proofCurrent.hashes[j:]...)
 				break
-
 			}
 		}
 	}
@@ -485,10 +485,20 @@ func (t *patriciaLookup) RetrieveBatchProofShort(targets []uint64) BatchProof {
 	}
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-	return BatchProof{targets, hashes, midpoints}
+	return BatchProof{targets, hashes, midpointsWidth}
 
 	// TODO
 
+}
+
+func calculateWidth(midpoint uint64) uint64 {
+	var width uint64
+	width = 0
+	for (midpoint & 1) == 0 {
+		midpoint = midpoint >> 1
+		width++
+	}
+	return width
 }
 
 // ProveBatch Returns a BatchProof proving a list of hashes against a forest
