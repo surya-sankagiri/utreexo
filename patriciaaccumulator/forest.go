@@ -349,11 +349,11 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 // 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
 //   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
 // NOTE: This version is meant to trim the data that's not needed,
-func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
+func (t *patriciaLookup) RetrieveBatchProofLong(targets []uint64) LongBatchProof {
 
 	// If no targets, return empty batchproof
 	if len(targets) == 0 {
-		return BatchProof{targets, make([]Hash, 0, 0), make([]uint64, 0, 0)}
+		return LongBatchProof{targets, make([]Hash, 0, 0), make([]uint64, 0, 0)}
 	}
 
 	// A slice of proofs of individual elements
@@ -411,7 +411,7 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 	}
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-	return BatchProof{targets, hashes, midpoints}
+	return LongBatchProof{targets, hashes, midpoints}
 
 	// TODO
 
@@ -423,28 +423,30 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 // 	 all midpoints on the main branches from the root to the proved leaves, represented as widths (uint8), in DFS order. ()
 //   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
 // NOTE: This version is meant to trim the data that's not needed,
-func (t *patriciaLookup) RetrieveBatchProofShort(targets []uint64) BatchProof {
+func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 
 	// If no targets, return empty batchproof
 	if len(targets) == 0 {
-		return BatchProof{targets, make([]Hash, 0, 0), make([]uint64, 0, 0)}
+		return BatchProof{targets, make([]Hash, 0, 0), make([]uint8, 0, 0)}
 	}
 
 	// A slice of proofs of individual elements
 	// RetrieveListProofs creates a list of individual proofs for targets, **in sorted order**
 	individualProofs, _ := t.RetrieveListProofs(targets)
 	// midpointsWidth is a slice that will go into the BatchProof; it will replace the slice of midpoints
-	var midpointsWidth = make([]uint64, 0, 0)
+	// TODO: convert midpointsWidth to []uint8
+	var midpointsWidth = make([]uint8, 0, 0)
 	// midpointsSet is used to remove repeated entries
 	var midpointsSet = make(map[uint64]bool)
-	var width uint64
+	var width uint8
 	// Add midpoints, one individualProof at a time, to midpointsWidth, and use midpointsSet to remove redundancies
 	for _, proof := range individualProofs {
+		midpointsWidth = append(midpointsWidth, 0)
 		for _, midpoint := range proof.midpoints {
-			//check if this midpoint has already been encountered
+			//check if this midpoint has already been seen before
 			if _, ok := midpointsSet[midpoint]; !ok {
 				midpointsSet[midpoint] = true
-				width = calculateWidth(midpoint)
+				width = calculateWidth(midpoint) + 1
 				midpointsWidth = append(midpointsWidth, width)
 			}
 		}
@@ -486,13 +488,11 @@ func (t *patriciaLookup) RetrieveBatchProofShort(targets []uint64) BatchProof {
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
 	return BatchProof{targets, hashes, midpointsWidth}
-
-	// TODO
-
 }
 
-func calculateWidth(midpoint uint64) uint64 {
-	var width uint64
+// TODO: convert width to uint8
+func calculateWidth(midpoint uint64) uint8 {
+	var width uint8
 	width = 0
 	for (midpoint & 1) == 0 {
 		midpoint = midpoint >> 1
