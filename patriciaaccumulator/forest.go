@@ -417,6 +417,90 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 
 }
 
+// RetrieveBatchProofShort creates a proof for a batch of targets against a state root
+// The proof consists of:
+//   The targets we are proving for (in left to right order) (aka ascending order)
+// 	 all midpoints on the main branches from the root to the proved leaves, represented as widths (uint8), in DFS order. ()
+//   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
+// NOTE: This version is meant to trim the data that's not needed,
+func (t *patriciaLookup) RetrieveBatchProofShort(targets []uint64) BatchProof {
+
+	// If no targets, return empty batchproof
+	if len(targets) == 0 {
+		return BatchProof{targets, make([]Hash, 0, 0), make([]uint64, 0, 0)}
+	}
+
+	// A slice of proofs of individual elements
+	// RetrieveListProofs creates a list of individual proofs for targets, **in sorted order**
+	individualProofs, _ := t.RetrieveListProofs(targets)
+	// midpointsWidth is a slice that will go into the BatchProof; it will replace the slice of midpoints
+	var midpointsWidth = make([]uint64, 0, 0)
+	// midpointsSet is used to remove repeated entries
+	var midpointsSet = make(map[uint64]bool)
+	var width uint64
+	// Add midpoints, one individualProof at a time, to midpointsWidth, and use midpointsSet to remove redundancies
+	for _, proof := range individualProofs {
+		for _, midpoint := range proof.midpoints {
+			//check if this midpoint has already been encountered
+			if _, ok := midpointsSet[midpoint]; !ok {
+				midpointsSet[midpoint] = true
+				width = calculateWidth(midpoint)
+				midpointsWidth = append(midpointsWidth, width)
+			}
+		}
+	}
+
+	hashesToDelete := make(map[Hash]bool)
+
+	allHashes := make([]Hash, len(individualProofs[0].hashes))
+	copy(allHashes, individualProofs[0].hashes)
+
+	// To compress this data into a BatchProof we must remove
+	// the hash children of nodes which occur in two individual proofs but fork
+	for i := 1; i < len(individualProofs); i++ {
+		proofCurrent := individualProofs[i]
+		proofPrev := individualProofs[i-1]
+		// fmt.Println(proofCurrent)
+		// fmt.Println(proofPrev)
+		// Iterate through i and i-1 to find the fork
+		for j, midpoint := range proofCurrent.midpoints {
+			if midpoint != proofPrev.midpoints[j] {
+				// Fork found
+				// Delete the hashes at j-1 from both
+				// filterDelete(hashes, proofCurrent.hashes[j-1])
+				hashesToDelete[proofPrev.hashes[j-1]] = true
+				// Now add the hashes from currentProof from after the fork
+				allHashes = append(allHashes, proofCurrent.hashes[j:]...)
+				break
+			}
+		}
+	}
+
+	// Delete deletable hashes
+	hashes := make([]Hash, 0, 0)
+	for _, hash := range allHashes {
+		if !hashesToDelete[hash] {
+			hashes = append(hashes, hash)
+		}
+	}
+
+	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+	return BatchProof{targets, hashes, midpointsWidth}
+
+	// TODO
+
+}
+
+func calculateWidth(midpoint uint64) uint64 {
+	var width uint64
+	width = 0
+	for (midpoint & 1) == 0 {
+		midpoint = midpoint >> 1
+		width++
+	}
+	return width
+}
+
 // ProveBatch Returns a BatchProof proving a list of hashes against a forest
 func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
 	targets := make([]uint64, len(hashes))
