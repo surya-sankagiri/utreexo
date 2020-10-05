@@ -19,8 +19,15 @@ import (
 // TODO it is actually possible to avoid including a prefix in every node of a proof and instead only hash in the prefix lengths
 // This makesthe system more space-efficient. See https://ethresear.ch/t/binary-trie-format/7621/6
 
-// BatchProof is a potential replacement structure for BatchProof in the PatriciaAccumulator Implementation - Bolton
+// BatchProof consists of a proof for a batch of leaves
 type BatchProof struct {
+	Targets        []uint64
+	hashes         []Hash  // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
+	midpointsWidth []uint8 // List of widths of midpoints of nodes that are ancestors of deleted elements
+}
+
+// LongBatchProof is a similar to BatchProof, but with midpoints explicit. in the PatriciaAccumulator Implementation - Bolton
+type LongBatchProof struct {
 	Targets   []uint64
 	hashes    []Hash   // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
 	midpoints []uint64 // List of equal midpoints of nodes that are ancestors of deleted elements
@@ -57,20 +64,20 @@ func (bp BatchProof) Reconstruct(nl uint64, h uint8) (map[uint64]Hash, error) {
 // TODO: Debug this function
 // TODO: make the running time of the code more efficient, if possible -Surya
 // TODO: make the BatchProof struct more efficient by removing repeated entries -Surya
-func MergeProofs(indProofs []PatriciaProof) BatchProof {
-	var batchProof BatchProof
-	Targets := []uint64{}
-	for _, proof := range indProofs {
-		Targets = append(Targets, proof.target)
-	}
-	sortedIndices := ArgsortNew(Targets)
-	for _, i := range sortedIndices {
-		batchProof.Targets = append(batchProof.Targets, indProofs[i].target)
-		batchProof.midpoints = append(batchProof.midpoints, indProofs[i].midpoints...)
-		batchProof.hashes = append(batchProof.hashes, indProofs[i].hashes...)
-	}
-	return batchProof
-}
+// func MergeProofs(indProofs []PatriciaProof) BatchProof {
+// 	var batchProof BatchProof
+// 	Targets := []uint64{}
+// 	for _, proof := range indProofs {
+// 		Targets = append(Targets, proof.target)
+// 	}
+// 	sortedIndices := ArgsortNew(Targets)
+// 	for _, i := range sortedIndices {
+// 		batchProof.Targets = append(batchProof.Targets, indProofs[i].target)
+// 		batchProof.midpoints = append(batchProof.midpoints, indProofs[i].midpoints...)
+// 		batchProof.hashes = append(batchProof.hashes, indProofs[i].hashes...)
+// 	}
+// 	return batchProof
+// }
 
 // Code for implementing ArgSort, lifted from the internet--Surya
 // --------------------------------------------------------
@@ -136,7 +143,7 @@ func (bp *BatchProof) ToBytes() []byte {
 		panic("error in converting batchproof to bytes.")
 	}
 	// then write the number of midpoints (4 byte uint32)
-	numMidpoints := uint32(len(bp.midpoints))
+	numMidpoints := uint32(len(bp.midpointsWidth))
 	if numMidpoints == 0 {
 		// TODO its actually possible, i think if we have a single element tree, then there is one target and nothing else
 		// panic("non-zero Targets but no midpoints.")
@@ -153,7 +160,7 @@ func (bp *BatchProof) ToBytes() []byte {
 		}
 	}
 	// this is followed by the midpoints
-	for _, m := range bp.midpoints {
+	for _, m := range bp.midpointsWidth {
 		err := binary.Write(&buf, binary.BigEndian, m)
 		if err != nil {
 			panic("error in converting batchproof to bytes.")
@@ -262,9 +269,9 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 		}
 	}
 	//read the midpoints
-	bp.midpoints = make([]uint64, numMidpoints)
-	for i := range bp.midpoints {
-		err := binary.Read(buf, binary.BigEndian, &bp.midpoints[i])
+	bp.midpointsWidth = make([]uint8, numMidpoints)
+	for i := range bp.midpointsWidth {
+		err := binary.Read(buf, binary.BigEndian, &bp.midpointsWidth[i])
 		if err != nil {
 			return bp, err
 		}
