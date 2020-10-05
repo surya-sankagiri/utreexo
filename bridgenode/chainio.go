@@ -5,8 +5,7 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/chaincfg"
-		accumulator "github.com/surya-sankagiri/utreexo/accumulator"
-
+	accumulator "github.com/surya-sankagiri/utreexo/accumulator"
 
 	"github.com/surya-sankagiri/utreexo/util"
 )
@@ -73,7 +72,7 @@ func restoreForest(
 	if err != nil {
 		return
 	}
-	panic("TODO implement this")
+	// panic("TODO implement this")
 	_ = forestFile
 	_ = miscForestFile
 	// forest, err = accumulator.RestoreForest(miscForestFile, forestFile, inRam, cached)
