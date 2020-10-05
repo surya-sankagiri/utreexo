@@ -488,13 +488,13 @@ func (p *Pollard) descendToPos(pos uint64) ([]*polNode, []*polNode, error) {
 // 	return ff, nil
 // }
 
-// func (p *Pollard) ToString() string {
-// 	f, err := p.toFull()
-// 	if err != nil {
-// 		return err.Error()
-// 	}
-// 	return f.ToString()
-// }
+func (p *Pollard) ToString() string {
+	f, err := p.toFull()
+	if err != nil {
+		return err.Error()
+	}
+	return f.ToString()
+}
 
 // // equalToForest checks if the pollard has the same leaves as the forest.
 // // doesn't check roots and stuff

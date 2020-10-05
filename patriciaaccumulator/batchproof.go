@@ -324,12 +324,22 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 // 	return bp, nil
 // }
 
-// getRootNode determines the root that the batchproof was produced on
+// getRootHash determines the root that the batchproof was produced on
 // Also returns the number of hashes used for recursion
-func (bp BatchProof) getRootNode(leafHashes []Hash) (patriciaNode, int) {
+func (bp BatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 
 	if len(leafHashes) != len(bp.Targets) {
 		panic("Wrong number of targets")
+	}
+
+	if len(bp.midpoints) == 0 {
+		// This should mean there is a single leaf
+		if len(bp.Targets) != 1 {
+			panic("Not a single leaf")
+
+		}
+		// Use a single leaf
+		return leafHashes[0], 1
 	}
 
 	biggestMidpoint := bp.midpoints[0]
@@ -372,31 +382,36 @@ func (bp BatchProof) getRootNode(leafHashes []Hash) (patriciaNode, int) {
 	// If it has a left and right child, we must simply prove the subtrees
 	if hasLeftChild && hasRightChild {
 		leftBatchProof.hashes = bp.hashes
-		leftNode, leftUsed := leftBatchProof.getRootNode(leafHashes[:len(leftBatchProof.Targets)])
+		leftHash, leftUsed := leftBatchProof.getRootHash(leafHashes[:len(leftBatchProof.Targets)])
 		rightBatchProof.hashes = bp.hashes[leftUsed:]
-		leftNode, rightUsed := rightBatchProof.getRootNode(leafHashes[len(leftBatchProof.Targets):])
+		rightHash, rightUsed := rightBatchProof.getRootHash(leafHashes[len(leftBatchProof.Targets):])
 
-		return patriciaNode{leftNode.hash(), rightNode.hash(), rootMidpoint}, leftUsed + rightUsed
+		node := patriciaNode{leftHash, rightHash, rootMidpoint}
+
+		return node.hash(), leftUsed + rightUsed
 	}
 	// If no right child
 	if hasLeftChild && !hasRightChild {
 		leftBatchProof.hashes = bp.hashes
-		leftNode, leftUsed := leftBatchProof.getRootNode(leafHashes[:len(leftBatchProof.Targets)])
+		leftNode, leftUsed := leftBatchProof.getRootHash(leafHashes[:len(leftBatchProof.Targets)])
 		// rightBatchProof.hashes = bp.hashes[leftUsed:]
-		// leftNode, rightUsed := rightBatchProof.getRootNode(leafHashes[len(leftBatchProof.Targets):])
+		// leftNode, rightUsed := rightBatchProof.getRootHash(leafHashes[len(leftBatchProof.Targets):])
+		node := patriciaNode{leftHash, bp.hashes[leftUsed], rootMidpoint}
 
-		return patriciaNode{leftNode.hash(), bp.hashes[leftUsed], rootMidpoint}, leftUsed + 1
+		return node.hash(), leftUsed + 1
 	}
 	// If no left child
 	if !hasLeftChild && hasRightChild {
 		leftUsed := 1
 		rightBatchProof.hashes = bp.hashes[leftUsed:]
-		leftNode, rightUsed := rightBatchProof.getRootNode(leafHashes[len(leftBatchProof.Targets):])
+		leftNode, rightUsed := rightBatchProof.getRootHash(leafHashes[len(leftBatchProof.Targets):])
 
-		return patriciaNode{bp.hashes[0], rightNode.hash(), rootMidpoint}, 1 + rightUsed
+		node := patriciaNode{bp.hashes[0], rightNode.hash(), rootMidpoint}
+
+		return node.hash(), 1 + rightUsed
 	}
-	// If neither, TODO ?
-
+	// If there should never be neither left or right, except in the leaf case, which we have already covered
+	panic("Oops")
 }
 
 // verifyBatchProof takes a block proof and reconstructs / verifies it.
