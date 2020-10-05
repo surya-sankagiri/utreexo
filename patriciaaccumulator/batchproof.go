@@ -17,7 +17,7 @@ import (
 // }
 
 // TODO it is actually possible to avoid including a prefix in every node of a proof and instead only hash in the prefix lengths
-// This makesthe system more space-efficient. See https://ethresear.ch/t/binary-trie-format/7621/6
+// This makes the system more space-efficient. See https://ethresear.ch/t/binary-trie-format/7621/6
 
 // BatchProof is a potential replacement structure for BatchProof in the PatriciaAccumulator Implementation - Bolton
 type BatchProof struct {
@@ -324,129 +324,102 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 // 	return bp, nil
 // }
 
-// TODO OH WAIT -- this is not how to to it!  Don't hash all the way up to the
-// roots to verify -- just hash up to any populated node!  Saves a ton of CPU!
+// getRootNode determines the root that the batchproof was produced on
+// Also returns the number of hashes used for recursion
+func (bp BatchProof) getRootNode(leafHashes []Hash) (patriciaNode, int) {
 
-// // verifyBatchProof takes a block proof and reconstructs / verifies it.
-// // takes a blockproof to verify, and the known correct roots to check against.
-// // also takes the number of leaves and forest rows (those are redundant
-// // if we don't do weird stuff with overly-high forests, which we might)
-// // it returns a bool of whether the proof worked, and a map of the sparse
-// // forest in the blockproof
-// func verifyBatchProof(
-// 	bp BatchProof, roots []Hash,
-// 	numLeaves uint64, rows uint8) (bool, map[uint64]Hash) {
+	if len(leafHashes) != len(bp.Targets) {
+		panic("Wrong number of targets")
+	}
 
-// 	// if nothing to prove, it worked
-// 	if len(bp.Targets) == 0 {
-// 		return true, nil
-// 	}
+	biggestMidpoint := bp.midpoints[0]
+	// Figure out the root midpoint
+	for _, midpoint := range bp.midpoints {
+		if subset(biggestMidpoint, midpoint) {
+			biggestMidpoint = midpoint
+		}
+	}
+	rootMidpoint := biggestMidpoint
 
-// 	// Construct a map with positions to hashes
-// 	proofmap, err := bp.Reconstruct(numLeaves, rows)
-// 	if err != nil {
-// 		fmt.Printf("VerifyBlockProof Reconstruct ERROR %s\n", err.Error())
-// 		return false, proofmap
-// 	}
+	// Does the root midpoint have two children?
+	var leftBatchProof, rightBatchProof BatchProof
+	hasLeftChild := false
+	hasRightChild := false
+	for _, midpoint := range bp.midpoints {
+		if midpoint < rootMidpoint {
+			hasLeftChild = true
+			leftBatchProof.midpoints = append(leftBatchProof.midpoints, midpoint)
+		} else if midpoint > rootMidpoint {
+			hasRightChild = true
+			rightBatchProof.midpoints = append(rightBatchProof.midpoints, midpoint)
+		}
+	}
+	for _, target := range bp.Targets {
+		if target < rootMidpoint {
+			hasLeftChild = true
+			leftBatchProof.Targets = append(leftBatchProof.Targets, target)
 
-// 	rootPositions, rootRows := getRootsReverse(numLeaves, rows)
+		} else if target >= rootMidpoint { // Equal means target in right side
+			hasRightChild = true
+			rightBatchProof.Targets = append(rightBatchProof.Targets, target)
 
-// 	// partial forest is built, go through and hash everything to make sure
-// 	// you get the right roots
+		}
+	}
 
-// 	tagRow := bp.Targets
-// 	nextRow := []uint64{}
-// 	sortUint64s(tagRow) // probably don't need to sort
+	var leftNode, rightNode patriciaNode
+	var leftHash, rightHash Hash
 
-// 	// TODO it's ugly that I keep treating the 0-row as a special case,
-// 	// and has led to a number of bugs.  It *is* special in a way, in that
-// 	// the bottom row is the only thing you actually prove and add/delete,
-// 	// but it'd be nice if it could all be treated uniformly.
+	// If it has a left and right child, we must simply prove the subtrees
+	if hasLeftChild && hasRightChild {
+		leftBatchProof.hashes = bp.hashes
+		leftNode, leftUsed := leftBatchProof.getRootNode(leafHashes[:len(leftBatchProof.Targets)])
+		rightBatchProof.hashes = bp.hashes[leftUsed:]
+		leftNode, rightUsed := rightBatchProof.getRootNode(leafHashes[len(leftBatchProof.Targets):])
 
-// 	if verbose {
-// 		fmt.Printf("tagrow len %d\n", len(tagRow))
-// 	}
+		return patriciaNode{leftNode.hash(), rightNode.hash(), rootMidpoint}, leftUsed + rightUsed
+	}
+	// If no right child
+	if hasLeftChild && !hasRightChild {
+		leftBatchProof.hashes = bp.hashes
+		leftNode, leftUsed := leftBatchProof.getRootNode(leafHashes[:len(leftBatchProof.Targets)])
+		// rightBatchProof.hashes = bp.hashes[leftUsed:]
+		// leftNode, rightUsed := rightBatchProof.getRootNode(leafHashes[len(leftBatchProof.Targets):])
 
-// 	var left, right uint64
+		return patriciaNode{leftNode.hash(), bp.hashes[leftUsed], rootMidpoint}, leftUsed + 1
+	}
+	// If no left child
+	if !hasLeftChild && hasRightChild {
+		leftUsed := 1
+		rightBatchProof.hashes = bp.hashes[leftUsed:]
+		leftNode, rightUsed := rightBatchProof.getRootNode(leafHashes[len(leftBatchProof.Targets):])
 
-// 	// iterate through rows
-// 	for row := uint8(0); row <= rows; row++ {
-// 		// iterate through tagged positions in this row
-// 		for len(tagRow) > 0 {
-// 			// Efficiency gains here. If there are two or more things to verify,
-// 			// check if the next thing to verify is the sibling of the current leaf
-// 			// we're on. Siblingness can be checked with bitwise XOR but since Targets are
-// 			// sorted, we can do bitwise OR instead.
-// 			if len(tagRow) > 1 && tagRow[0]|1 == tagRow[1] {
-// 				left = tagRow[0]
-// 				right = tagRow[1]
-// 				tagRow = tagRow[2:]
-// 			} else { // if not only use one tagged position
-// 				right = tagRow[0] | 1
-// 				left = right ^ 1
-// 				tagRow = tagRow[1:]
-// 			}
+		return patriciaNode{bp.hashes[0], rightNode.hash(), rootMidpoint}, 1 + rightUsed
+	}
+	// If neither, TODO ?
 
-// 			if verbose {
-// 				fmt.Printf("left %d rootPoss %d\n", left, rootPositions[0])
-// 			}
-// 			// check for roots
-// 			if left == rootPositions[0] {
-// 				if verbose {
-// 					fmt.Printf("one left in tagrow; should be root\n")
-// 				}
-// 				// Grab the hash of this position from the map
-// 				computedRootHash, ok := proofmap[left]
-// 				if !ok {
-// 					fmt.Printf("ERR no proofmap for root at %d\n", left)
-// 					return false, nil
-// 				}
-// 				// Verify that this root hash matches the one we stored
-// 				if computedRootHash != roots[0] {
-// 					fmt.Printf("row %d root, pos %d expect %04x got %04x\n",
-// 						row, left, roots[0][:4], computedRootHash[:4])
-// 					return false, nil
-// 				}
-// 				// otherwise OK and pop of the root
-// 				roots = roots[1:]
-// 				rootPositions = rootPositions[1:]
-// 				rootRows = rootRows[1:]
-// 				break
-// 			}
+}
 
-// 			// Grab the parent position of the leaf we've verified
-// 			parentPos := parent(left, rows)
-// 			if verbose {
-// 				fmt.Printf("%d %04x %d %04x -> %d\n",
-// 					left, proofmap[left], right, proofmap[right], parentPos)
-// 			}
+// verifyBatchProof takes a block proof and reconstructs / verifies it.
+// takes a blockproof to verify, list of leafHashes at the targets, and the state root to check against.
+// it returns a bool of whether the proof worked
+// TODO for bolton - implement
+func verifyBatchProof(
+	bp BatchProof, root Hash, leafHashes []Hash) bool {
 
-// 			// this will crash if either is 0000
-// 			// reconstruct the next row and add the parent to the map
-// 			parhash := parentHash(proofmap[left], proofmap[right])
-// 			nextRow = append(nextRow, parentPos)
-// 			proofmap[parentPos] = parhash
-// 		}
+	// if nothing to prove, it worked
+	if len(bp.Targets) == 0 {
+		return true
+	}
 
-// 		// Make the nextRow the tagRow so we'll be iterating over it
-// 		// reset th nextRow
-// 		tagRow = nextRow
-// 		nextRow = []uint64{}
+	proofRoot := bp.getRootNode()
+	proofRootHash := proofRoot.hash()
 
-// 		// if done with row and there's a root left on this row, remove it
-// 		if len(rootRows) > 0 && rootRows[0] == row {
-// 			// bit ugly to do these all separately eh
-// 			roots = roots[1:]
-// 			rootPositions = rootPositions[1:]
-// 			rootRows = rootRows[1:]
-// 		}
-// 	}
+	return proofRootHash == root
 
-// 	return true, proofmap
-// }
+}
 
-// // Reconstruct takes a number of leaves and rows, and turns a block proof back
-// // into a partial proof tree. Should leave bp intact
+// // Reconstruct for the patricia code should simply reconstruct the tree from the batch proof
+// // Currently for target form of tree, later will do from widths
 // func (bp *BatchProof) Reconstruct(
 // 	numleaves uint64, forestRows uint8) (map[uint64]Hash, error) {
 
