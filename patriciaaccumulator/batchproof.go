@@ -333,7 +333,7 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 
 // getRootHash determines the root that the batchproof was produced on
 // Also returns the number of hashes used for recursion
-func (bp BatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
+func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 
 	if len(leafHashes) != len(bp.Targets) {
 		panic("Wrong number of targets")
@@ -359,7 +359,7 @@ func (bp BatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 	rootMidpoint := biggestMidpoint
 
 	// Does the root midpoint have two children?
-	var leftBatchProof, rightBatchProof BatchProof
+	var leftBatchProof, rightBatchProof LongBatchProof
 	hasLeftChild := false
 	hasRightChild := false
 	for _, midpoint := range bp.midpoints {
@@ -383,8 +383,7 @@ func (bp BatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 		}
 	}
 
-	var leftNode, rightNode patriciaNode
-	var leftHash, rightHash Hash
+	// var leftHash, rightHash Hash
 
 	// If it has a left and right child, we must simply prove the subtrees
 	if hasLeftChild && hasRightChild {
@@ -400,7 +399,7 @@ func (bp BatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 	// If no right child
 	if hasLeftChild && !hasRightChild {
 		leftBatchProof.hashes = bp.hashes
-		leftNode, leftUsed := leftBatchProof.getRootHash(leafHashes[:len(leftBatchProof.Targets)])
+		leftHash, leftUsed := leftBatchProof.getRootHash(leafHashes[:len(leftBatchProof.Targets)])
 		// rightBatchProof.hashes = bp.hashes[leftUsed:]
 		// leftNode, rightUsed := rightBatchProof.getRootHash(leafHashes[len(leftBatchProof.Targets):])
 		node := patriciaNode{leftHash, bp.hashes[leftUsed], rootMidpoint}
@@ -411,9 +410,9 @@ func (bp BatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 	if !hasLeftChild && hasRightChild {
 		leftUsed := 1
 		rightBatchProof.hashes = bp.hashes[leftUsed:]
-		leftNode, rightUsed := rightBatchProof.getRootHash(leafHashes[len(leftBatchProof.Targets):])
+		rightHash, rightUsed := rightBatchProof.getRootHash(leafHashes[len(leftBatchProof.Targets):])
 
-		node := patriciaNode{bp.hashes[0], rightNode.hash(), rootMidpoint}
+		node := patriciaNode{bp.hashes[0], rightHash, rootMidpoint}
 
 		return node.hash(), 1 + rightUsed
 	}
@@ -426,17 +425,16 @@ func (bp BatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 // it returns a bool of whether the proof worked
 // TODO for bolton - implement
 func verifyBatchProof(
-	bp BatchProof, root Hash, leafHashes []Hash) bool {
+	bp LongBatchProof, root Hash, leafHashes []Hash) bool {
 
 	// if nothing to prove, it worked
 	if len(bp.Targets) == 0 {
 		return true
 	}
 
-	proofRoot := bp.getRootNode()
-	proofRootHash := proofRoot.hash()
+	proofRoot, _ := bp.getRootHash(leafHashes)
 
-	return proofRootHash == root
+	return proofRoot == root
 
 }
 

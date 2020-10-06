@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	accumulator "github.com/surya-sankagiri/utreexo/accumulator"
+	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 
 	"github.com/surya-sankagiri/utreexo/util"
 
@@ -127,7 +127,8 @@ func BuildProofs(
 		// Add to WaitGroup and send data to channel to be written
 		// to disk
 		fileWait.Add(1)
-		proofChan <- b
+		// Commenting this out to go easy on my harddisk -Bolton
+		// proofChan <- b
 
 		ud.AccProof.SortTargets()
 
