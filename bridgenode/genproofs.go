@@ -115,7 +115,8 @@ func BuildProofs(
 		}
 
 		// convert UData struct to bytes
-		b := ud.ToBytes()
+		// Commenting this out to go easy on my harddisk -Bolton
+		// b := ud.ToBytes()
 
 		proofData := ud.AccProof.ToBytes()
 
