@@ -15,7 +15,13 @@ with open('utreexosizedata.csv', newline='') as csvfile:
     utreexo_data = [int(d[1]) for d in utreexo_data]
 
 
-# assert len(our_data) == len(utreexo_data)
+min_data_len = min(len(utreexo_data), len(our_data))
+
+utreexo_data = utreexo_data[:min_data_len]
+our_data = our_data[:min_data_len]
+
+print(len(our_data), len(utreexo_data))
+assert len(our_data) == len(utreexo_data)
 
 SMOOTH = 1000
 
@@ -23,7 +29,8 @@ our_data_smoothed = [sum(our_data[i:i+SMOOTH])/SMOOTH for i in range(len(our_dat
 
 utreexo_data_smoothed = [sum(utreexo_data[i:i+SMOOTH])/SMOOTH for i in range(len(utreexo_data) - SMOOTH)]
 
-print(our_data)
+print(sum(our_data)/sum(utreexo_data))
+
 
 plt.plot(range(len(our_data_smoothed)), our_data_smoothed, label="Ours")
 plt.plot(range(len(utreexo_data_smoothed)), utreexo_data_smoothed, label="Utreexo")
