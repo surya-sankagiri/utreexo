@@ -211,11 +211,11 @@ func newPatriciaNode(child1, child2 patriciaNode) patriciaNode {
 // 	return t
 // }
 
-func (t *patriciaLookup) merge(other *patriciaLookup) {
-	for hash, node := range other.treeNodes {
-		t.treeNodes[hash] = node
-	}
-}
+// func (t *patriciaLookup) merge(other *patriciaLookup) {
+// 	for hash, node := range other.treeNodes {
+// 		t.treeNodes[hash] = node
+// 	}
+// }
 
 // For debugging
 func (t *patriciaLookup) String() string {
