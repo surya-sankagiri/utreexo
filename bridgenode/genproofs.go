@@ -1,6 +1,10 @@
 package bridgenode
 
 import (
+	"bytes"
+	"compress/flate"
+	"compress/gzip"
+	"compress/zlib"
 	"fmt"
 	"log"
 	"os"
@@ -91,6 +95,7 @@ func BuildProofs(
 	if err != nil {
 		log.Println(err)
 	}
+	datafile.WriteString("Block Number, Uncompressed, zlib, gzip, flate")
 	defer datafile.Close()
 
 	for ; height != knownTipHeight && !stop; height++ {
@@ -120,8 +125,29 @@ func BuildProofs(
 
 		proofData := ud.AccProof.ToBytes()
 
-		// In theory, all I have to do is to pipe height and len(b) to a file
-		if _, err := datafile.WriteString(fmt.Sprintf("%d, %d \n", height, len(proofData))); err != nil {
+		uncompressedLength := len(proofData)
+		// zlib compression
+		var zlibBuf bytes.Buffer
+		zlibw := zlib.NewWriter(&zlibBuf)
+		zlibw.Write(proofData)
+		zlibw.Close()
+		zlibLength := len(zlibBuf.Bytes())
+		// gzip compression
+		var gzipBuf bytes.Buffer
+		gzipw := gzip.NewWriter(&gzipBuf)
+		gzipw.Write(proofData)
+		gzipw.Close()
+		gzipLength := len(gzipBuf.Bytes())
+		// flate compression
+		var flateBuf bytes.Buffer
+		flatew, _ := flate.NewWriter(&flateBuf, -1)
+		flatew.Write(proofData)
+		flatew.Close()
+		flateLength := len(flateBuf.Bytes())
+
+		_, err = datafile.WriteString(
+			fmt.Sprintf("%d, %d, %d, %d, %d \n", height, uncompressedLength, zlibLength, gzipLength, flateLength))
+		if err != nil {
 			log.Println(err)
 		}
 
