@@ -99,7 +99,6 @@ type patriciaLookup struct {
 	stateRoot     Hash
 	treeNodes     map[Hash]patriciaNode
 	leafLocations map[Hash]uint64
-	// TODO add a leaf node to location map?
 }
 
 type patriciaNode struct {
