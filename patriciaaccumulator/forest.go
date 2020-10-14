@@ -1103,10 +1103,10 @@ func (f *Forest) addv2(adds []Leaf) error {
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
 func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 
-	numDels, numAdds := len(dels), len(adds)
+	// numDels, numAdds := len(dels), len(adds)
 	// delta := int64(numAdds - numDels) // watch 32/64 bit
 
-	fmt.Printf("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
+	// fmt.Printf("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
 
 	// Changing this
 	// if int64(f.numLeaves)+delta < 0 {
@@ -1139,7 +1139,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	// }
 
 	// v3 should do the exact same thing as v2 now
-	fmt.Printf("Beginning Deletes\n")
+	// fmt.Printf("Beginning Deletes\n")
 	err := f.removev5(dels)
 	if err != nil {
 		return nil, err
@@ -1153,7 +1153,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	// the right place when it's swapped in reverse
 	// ub := f.BuildUndoData(uint64(numAdds), dels)
 
-	fmt.Printf("Beginning Adds\n")
+	// fmt.Printf("Beginning Adds\n")
 	err = f.addv2(adds)
 	if err != nil {
 		return nil, err
