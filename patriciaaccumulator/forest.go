@@ -97,7 +97,7 @@ type Forest struct {
 
 type patriciaLookup struct {
 	stateRoot     Hash
-	treeNodes     map[Hash]patriciaNode
+	treeNodes     diskTreeNodes
 	leafLocations map[Hash]uint64
 }
 
@@ -226,7 +226,7 @@ func (t *patriciaLookup) String() string {
 }
 
 func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
-	node, _ := t.treeNodes[nodeHash]
+	node, _ := t.treeNodes.read(nodeHash)
 
 	out := ""
 
@@ -272,7 +272,7 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	// var neighborHashes = make([]Hash, 0, 64)
 	var ok bool
 	// Start at the root of the tree
-	node, ok = t.treeNodes[t.stateRoot]
+	node, ok = t.treeNodes.read(t.stateRoot)
 	if !ok {
 		return proof, fmt.Errorf("state root %x not found", t.stateRoot)
 	}
@@ -308,11 +308,11 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 		}
 
 		// We are not yet at the leaf, so we descend the tree.
-		node, ok = t.treeNodes[nodeHash]
+		node, ok = t.treeNodes.read(nodeHash)
 		if !ok {
 			return proof, fmt.Errorf("Patricia Node %x not found", nodeHash)
 		}
-		_, ok = t.treeNodes[neighborHash]
+		_, ok = t.treeNodes.read(neighborHash)
 		if !ok {
 			return proof, fmt.Errorf("Patricia Node %x not found", neighborHash)
 		}
@@ -331,7 +331,9 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 	for _, target := range targets {
 		proof, _ := t.RetrieveProof(target)
 
-		if proof.midpoints[0] != t.treeNodes[t.stateRoot].midpoint {
+		rootNode, _ := t.treeNodes.read(t.stateRoot)
+
+		if proof.midpoints[0] != rootNode.midpoint {
 			panic("Wrong root midpoint")
 		}
 
@@ -552,14 +554,14 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	// Add the new leaf node
 	newLeafNode := patriciaNode{toAdd, toAdd, location}
-	t.treeNodes[newLeafNode.hash()] = newLeafNode
+	t.treeNodes.write(newLeafNode.hash(), newLeafNode)
 	t.leafLocations[toAdd] = location
 
 	// fmt.Println("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting")
 
 	if t.stateRoot == empty {
 		// If the patriciaLookup is empty (has empty root), treeNodes should be empty
-		if len(t.treeNodes) > 1 {
+		if t.treeNodes.size() > 1 {
 			return fmt.Errorf("stateRoot empty, but treeNodes was populated")
 		}
 
@@ -569,7 +571,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 		return nil
 
 	}
-	node, ok := t.treeNodes[t.stateRoot]
+	node, ok := t.treeNodes.read(t.stateRoot)
 	// fmt.Println("starting root midpoint is", node.midpoint)
 	if !ok {
 		return fmt.Errorf("state root %x not found", t.stateRoot)
@@ -594,22 +596,22 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 		// Determine if we descend left or right
 		if node.inLeft(location) {
-			neighbor = t.treeNodes[node.right]
+			neighbor, _ = t.treeNodes.read(node.right)
 			hash = node.left
 		} else {
-			neighbor = t.treeNodes[node.left]
+			neighbor, _ = t.treeNodes.read(node.left)
 			hash = node.right
 		}
 		// Add the other direction node to the branch
 		neighborBranch = append(neighborBranch, neighbor)
 		// Update node down the tree
-		node = t.treeNodes[hash]
+		node, _ = t.treeNodes.read(hash)
 
 	} // End loop
 
 	// Combine leaf node with its new sibling
 	nodeToAdd := newPatriciaNode(newLeafNode, node)
-	t.treeNodes[nodeToAdd.hash()] = nodeToAdd
+	t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
 
 	// We travel up the branch, recombining nodes
 	for len(neighborBranch) > 0 {
@@ -618,11 +620,11 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 		neighborNode := neighborBranch[len(neighborBranch)-1]
 		neighborBranch = neighborBranch[:len(neighborBranch)-1]
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
-		t.treeNodes[nodeToAdd.hash()] = nodeToAdd
+		t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
 	}
 	// Delete all nodes in the main branch, they have been replaced
 	for _, node := range mainBranch {
-		delete(t.treeNodes, node.hash())
+		t.treeNodes.delete(node.hash())
 	}
 
 	// The new state root is the hash of the last node added
@@ -647,7 +649,7 @@ func (t *patriciaLookup) remove(location uint64) {
 		panic("State root is empty hash")
 	}
 
-	node, ok := t.treeNodes[t.stateRoot]
+	node, ok := t.treeNodes.read(t.stateRoot)
 	if !ok {
 		panic(fmt.Sprint("Could not find root ", t.stateRoot[:6], " in nodes"))
 	}
@@ -665,16 +667,16 @@ func (t *patriciaLookup) remove(location uint64) {
 
 		// Determine if we descend left or right
 		if node.inLeft(location) {
-			neighbor = t.treeNodes[node.right]
+			neighbor, _ = t.treeNodes.read(node.right)
 			hash = node.left
 		} else {
-			neighbor = t.treeNodes[node.left]
+			neighbor, _ = t.treeNodes.read(node.left)
 			hash = node.right
 		}
 		// Add the other direction node to the branch
 		neighborBranch = append(neighborBranch, neighbor)
 		// Update node down the tree
-		node = t.treeNodes[hash]
+		node, _ = t.treeNodes.read(hash)
 		// fmt.Printf("midpoint %d\n", node.midpoint)
 
 	} // End loop
@@ -687,7 +689,7 @@ func (t *patriciaLookup) remove(location uint64) {
 
 	// Delete all nodes in the main branch, they are to be replaced
 	for _, node := range mainBranch {
-		delete(t.treeNodes, node.hash())
+		t.treeNodes.delete(node.hash())
 	}
 
 	// If there are no elements in the neighbor nodes, the leaf we deleted was the root
@@ -712,7 +714,7 @@ func (t *patriciaLookup) remove(location uint64) {
 	// That is, the last two nodes in the neighborBranch
 	nodeToAdd := newPatriciaNode(neighborBranch[len(neighborBranch)-1], neighborBranch[len(neighborBranch)-2])
 	neighborBranch = neighborBranch[:len(neighborBranch)-2]
-	t.treeNodes[nodeToAdd.hash()] = nodeToAdd
+	t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
 
 	// We travel up the branch, recombining nodes
 	for len(neighborBranch) > 0 {
@@ -720,7 +722,7 @@ func (t *patriciaLookup) remove(location uint64) {
 		neighborNode := neighborBranch[len(neighborBranch)-1]
 		neighborBranch = neighborBranch[:len(neighborBranch)-1]
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
-		t.treeNodes[nodeToAdd.hash()] = nodeToAdd
+		t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
 	}
 
 	// The new state root is the hash of the last node added
@@ -758,28 +760,31 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 	f.numLeaves = 0
 	f.maxLeaf = 0
 
+	f.lookup = patriciaLookup{Hash{}, diskTreeNodes{}, make(map[Hash]uint64)}
+
 	if forestFile == nil {
 		// for in-ram
-		f.data = new(ramForestData)
+		// f.data = new(ramForestData)
+		panic("We arent doing ram")
 	} else {
 		// panic("We cannot yet create a forest from cache or memory")
 
 		if cached {
-			d := new(cacheForestData)
-			d.file = forestFile
-			d.cache = newDiskForestCache(20)
-			f.data = d
+			panic("We dont do this either")
+			// d := new(cacheForestData)
+			// d.file = forestFile
+			// d.cache = newDiskForestCache(20)
+			// f.data = d
 		} else {
 			// for on-disk
-			d := new(diskForestData)
-			d.file = forestFile
-			f.data = d
+			f.lookup.treeNodes.file = forestFile
+			f.lookup.treeNodes.indexMap = make(map[MiniHash]uint64)
+
 		}
 	}
 
-	f.data.resize(1)
+	// f.data.resize(1)
 	// f.positionMap = make(map[MiniHash]uint64)
-	f.lookup = patriciaLookup{Hash{}, make(map[Hash]patriciaNode), make(map[Hash]uint64)}
 	return f
 }
 
