@@ -13,7 +13,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
-		accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
+		accumulator "github.com/surya-sankagiri/utreexo/accumulator"
 
 
 )

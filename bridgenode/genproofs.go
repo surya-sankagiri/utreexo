@@ -2,8 +2,6 @@ package bridgenode
 
 import (
 	"bytes"
-	"compress/flate"
-	"compress/gzip"
 	"compress/zlib"
 	"fmt"
 	"log"
@@ -14,7 +12,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
+	accumulator "github.com/surya-sankagiri/utreexo/accumulator"
 
 	"github.com/surya-sankagiri/utreexo/util"
 
@@ -132,21 +130,21 @@ func BuildProofs(
 		zlibw.Write(proofData)
 		zlibw.Close()
 		zlibLength := len(zlibBuf.Bytes())
-		// gzip compression
-		var gzipBuf bytes.Buffer
-		gzipw := gzip.NewWriter(&gzipBuf)
-		gzipw.Write(proofData)
-		gzipw.Close()
-		gzipLength := len(gzipBuf.Bytes())
-		// flate compression
-		var flateBuf bytes.Buffer
-		flatew, _ := flate.NewWriter(&flateBuf, -1)
-		flatew.Write(proofData)
-		flatew.Close()
-		flateLength := len(flateBuf.Bytes())
+		// // gzip compression
+		// var gzipBuf bytes.Buffer
+		// gzipw := gzip.NewWriter(&gzipBuf)
+		// gzipw.Write(proofData)
+		// gzipw.Close()
+		// gzipLength := len(gzipBuf.Bytes())
+		// // flate compression
+		// var flateBuf bytes.Buffer
+		// flatew, _ := flate.NewWriter(&flateBuf, -1)
+		// flatew.Write(proofData)
+		// flatew.Close()
+		// flateLength := len(flateBuf.Bytes())
 
 		_, err = datafile.WriteString(
-			fmt.Sprintf("%d, %d, %d, %d, %d \n", height, uncompressedLength, zlibLength, gzipLength, flateLength))
+			fmt.Sprintf("%d, %d, %d \n", height, uncompressedLength, zlibLength))
 		if err != nil {
 			log.Println(err)
 		}

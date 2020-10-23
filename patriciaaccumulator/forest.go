@@ -97,7 +97,7 @@ type Forest struct {
 
 type patriciaLookup struct {
 	stateRoot     Hash
-	treeNodes     diskTreeNodes
+	treeNodes     ForestData
 	leafLocations map[Hash]uint64
 }
 

@@ -4,10 +4,89 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 // Size of a hash and a patricia node 32 + 2 * 32 + 8
 const slotSize = 104
+
+// A treenodes with a ram cache. The disk is the same, but the cache allows you to be faster
+type ramCacheTreeNodes struct {
+	disk        diskTreeNodes
+	ram         lru.Cache
+	maxRAMElems int
+}
+
+// read ignores errors. Probably get an empty hash if it doesn't work
+func (d *ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
+
+	val, ok := d.ram.Get(hash)
+	if ok {
+		return val.(patriciaNode), ok
+	}
+	// If not in memory, read disk
+	return d.disk.read(hash)
+
+}
+
+// write writes a key-value pair
+func (d *ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
+
+	// Write to disk
+	d.disk.write(hash, node)
+
+	// Write to ram
+	d.ram.Add(hash, node)
+
+	// _, ok := d.ram[hash]
+
+	// if ok {
+	// 	// Already in ram, we are done
+	// 	// d.ram[hash] = node
+	// 	return
+	// }
+
+	// _, ok = d.disk.read(hash)
+	// if ok {
+	// 	// Already in disk, done
+	// 	return
+	// }
+
+	// // Not in ram or disk
+	// if len(d.ram) < d.maxRAMElems {
+	// 	// write to ram
+	// 	d.ram[hash] = node
+	// } else {
+	// 	// Write to ram, move something in ram to disk
+
+	// }
+}
+
+func (d *ramCacheTreeNodes) delete(hash Hash) {
+
+	// Delete from disk
+	d.disk.delete(hash)
+
+	// Delte from ram
+	d.ram.Remove(hash)
+
+	// _, ok := d.ram[hash]
+	// if ok {
+	// 	delete(d.ram, hash)
+	// } else {
+	// 	d.disk.delete(hash)
+	// }
+}
+
+// size gives you the size of the forest
+func (d *ramCacheTreeNodes) size() uint64 {
+	return d.disk.size()
+}
+
+func (d *ramCacheTreeNodes) close() {
+	d.disk.close()
+}
 
 // diskTreeNodes is a disk backed key value store from hashes to patricia nodes
 // for the lookup.
