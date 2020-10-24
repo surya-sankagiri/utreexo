@@ -8,6 +8,8 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 // A FullForest is the entire accumulator of the UTXO set. This is
@@ -760,7 +762,10 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 	f.numLeaves = 0
 	f.maxLeaf = 0
 
-	f.lookup = patriciaLookup{Hash{}, diskTreeNodes{}, make(map[Hash]uint64)}
+	cache, err := lru.New(1000)
+	if err != nil {
+		panic("Error making cache")
+	}
 
 	if forestFile == nil {
 		// for in-ram
@@ -777,8 +782,14 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 			// f.data = d
 		} else {
 			// for on-disk
-			f.lookup.treeNodes.file = forestFile
-			f.lookup.treeNodes.indexMap = make(map[MiniHash]uint64)
+			// Max 10000 elems in ram to start
+			treeNodes := ramCacheTreeNodes{diskTreeNodes{}, cache, 10000}
+			treeNodes.disk.file = forestFile
+			treeNodes.disk.indexMap = make(map[MiniHash]uint64)
+
+			f.lookup = patriciaLookup{Hash{}, treeNodes, make(map[Hash]uint64)}
+
+			f.lookup.treeNodes = treeNodes
 
 		}
 	}

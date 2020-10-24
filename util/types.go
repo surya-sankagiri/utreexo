@@ -8,7 +8,7 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcd/wire"
-		accumulator "github.com/surya-sankagiri/utreexo/accumulator"
+		accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 
 
 )
