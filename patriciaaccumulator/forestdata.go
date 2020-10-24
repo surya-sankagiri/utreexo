@@ -11,11 +11,34 @@ import (
 // Size of a hash and a patricia node 32 + 2 * 32 + 8
 const slotSize = 104
 
+// ForestData is the thing that holds all the hashes in the forest.  Could
+// be in a file, or in ram, or maybe something else.
+type ForestData interface {
+	read(hash Hash) (patriciaNode, bool)
+	// TODO we only ever write a node to its own hash, so get rid of first argument
+	write(hash Hash, node patriciaNode)
+	delete(hash Hash)
+	// swapHash(a, b uint64)
+	// swapHashRange(a, b, w uint64)
+	size() uint64
+	// resize(newSize uint64) // make it have a new size (bigger)
+	close()
+}
+
 // A treenodes with a ram cache. Every entry exists in either the disk or the ram, not both
 type ramCacheTreeNodes struct {
 	disk        diskTreeNodes
 	ram         *lru.Cache
 	maxRAMElems int
+}
+
+// newRamCacheTreeNodes returns a new treenodes container with a ram cache
+func newRAMCacheTreeNodes(file *os.File, maxRAMElems int) ramCacheTreeNodes {
+	cache, err := lru.New(maxRAMElems)
+	if err != nil {
+		panic("Error making cache")
+	}
+	return ramCacheTreeNodes{newDiskTreeNodes(file), cache, maxRAMElems}
 }
 
 // read ignores errors. Probably get an empty hash if it doesn't work
@@ -96,18 +119,9 @@ type diskTreeNodes struct {
 	indexMap map[MiniHash]uint64
 }
 
-// ForestData is the thing that holds all the hashes in the forest.  Could
-// be in a file, or in ram, or maybe something else.
-type ForestData interface {
-	read(hash Hash) (patriciaNode, bool)
-	// TODO we only ever write a node to its own hash, so get rid of first argument
-	write(hash Hash, node patriciaNode)
-	delete(hash Hash)
-	// swapHash(a, b uint64)
-	// swapHashRange(a, b, w uint64)
-	size() uint64
-	// resize(newSize uint64) // make it have a new size (bigger)
-	close()
+// newDiskTreeNodes makes a new file-backed tree nodes container
+func newDiskTreeNodes(file *os.File) diskTreeNodes {
+	return diskTreeNodes{file, make(map[MiniHash]uint64)}
 }
 
 // ********************************************* forest on disk
