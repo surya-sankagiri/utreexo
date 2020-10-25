@@ -733,7 +733,7 @@ func (t *patriciaLookup) remove(location uint64) {
 
 // Delete the leaves at the locations for the trie forest
 func (f *Forest) removev5(locations []uint64) error {
-
+	start := time.Now()
 	if f.numLeaves < uint64(len(locations)) {
 		panic(fmt.Sprintf("Attempting to delete %v nodes, only %v exist", len(locations), f.numLeaves))
 	}
@@ -748,10 +748,14 @@ func (f *Forest) removev5(locations []uint64) error {
 
 		f.lookup.remove(location)
 	}
-
+	end := time.Now()
+	if len(locations) > 100 {
+		fmt.Println("Time to delete", len(locations), "UTXOs:", end.Sub(start))
+	}
 	f.numLeaves = nextNumLeaves
 
 	return nil
+
 }
 
 // NewForest Makes a new forest
@@ -1069,7 +1073,7 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) addv2(adds []Leaf) error {
-
+	start := time.Now()
 	for _, add := range adds {
 
 		// f.lookup.printAll()
@@ -1082,6 +1086,11 @@ func (f *Forest) addv2(adds []Leaf) error {
 		f.maxLeaf++
 		f.numLeaves++
 	}
+	end := time.Now()
+	if len(adds) > 100 {
+		fmt.Println("Time to add", len(adds), "UTXOs:", end.Sub(start))
+	}
+
 	return nil
 	// for _, add := range adds {
 	// 	// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)

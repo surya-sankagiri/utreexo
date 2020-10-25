@@ -149,6 +149,7 @@ var empty [32]byte
 
 // rnew -- emove v4 with swapHashRange
 func (f *Forest) removev4(dels []uint64) error {
+	start := time.Now()
 	nextNumLeaves := f.numLeaves - uint64(len(dels))
 	// check that all dels are there
 	for _, dpos := range dels {
@@ -172,6 +173,10 @@ func (f *Forest) removev4(dels []uint64) error {
 		if err != nil {
 			return err
 		}
+	}
+	end := time.Now()
+	if len(dels) > 100 {
+		fmt.Println("Time to delete", len(dels), "UTXOs:", end.Sub(start))
 	}
 	f.numLeaves = nextNumLeaves
 
@@ -372,7 +377,7 @@ func (f *Forest) Add(adds []Leaf) {
 
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) addv2(adds []Leaf) {
-
+	start := time.Now()
 	for _, add := range adds {
 		// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
 		f.positionMap[add.Mini()] = f.numLeaves
@@ -391,6 +396,10 @@ func (f *Forest) addv2(adds []Leaf) {
 			//			fmt.Printf("wrote %x to %d\n", n[:4], pos)
 		}
 		f.numLeaves++
+	}
+	end := time.Now()
+	if len(adds) > 100 {
+		fmt.Println("Time to add", len(adds), "UTXOs:", end.Sub(start))
 	}
 }
 
@@ -423,7 +432,6 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 			return nil, err
 		}
 	}
-
 	// v3 should do the exact same thing as v2 now
 	err := f.removev4(dels)
 	if err != nil {

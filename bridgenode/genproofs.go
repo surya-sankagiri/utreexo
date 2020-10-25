@@ -2,8 +2,6 @@ package bridgenode
 
 import (
 	"bytes"
-	"compress/flate"
-	"compress/gzip"
 	"compress/zlib"
 	"fmt"
 	"log"
@@ -14,7 +12,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
+	accumulator "github.com/surya-sankagiri/utreexo/accumulator"
 
 	"github.com/surya-sankagiri/utreexo/util"
 
@@ -134,22 +132,22 @@ func BuildProofs(
 		zlibLength := len(zlibBuf.Bytes())
 		t2 := time.Now()
 		// gzip compression
-		var gzipBuf bytes.Buffer
-		gzipw := gzip.NewWriter(&gzipBuf)
-		gzipw.Write(proofData)
-		gzipw.Close()
-		gzipLength := len(gzipBuf.Bytes())
-		t3 := time.Now()
-		// flate compression
-		var flateBuf bytes.Buffer
-		flatew, _ := flate.NewWriter(&flateBuf, -1)
-		flatew.Write(proofData)
-		flatew.Close()
-		flateLength := len(flateBuf.Bytes())
-		t4 := time.Now()
+		// var gzipBuf bytes.Buffer
+		// gzipw := gzip.NewWriter(&gzipBuf)
+		// gzipw.Write(proofData)
+		// gzipw.Close()
+		// gzipLength := len(gzipBuf.Bytes())
+		// t3 := time.Now()
+		// // flate compression
+		// var flateBuf bytes.Buffer
+		// flatew, _ := flate.NewWriter(&flateBuf, -1)
+		// flatew.Write(proofData)
+		// flatew.Close()
+		// flateLength := len(flateBuf.Bytes())
+		// t4 := time.Now()
 
 		_, err = datafile.WriteString(
-			fmt.Sprintf("%d, %d, %d, %d, %d, \n", height, uncompressedLength, zlibLength, gzipLength, flateLength))
+			fmt.Sprintf("%d, %d, %d,\n", height, uncompressedLength, zlibLength)) // %d, %d, gzipLength, flateLength
 
 		if err != nil {
 			log.Println(err)
@@ -179,8 +177,9 @@ func BuildProofs(
 			fmt.Println("Time elapsed: ", t.Sub(start))
 			fmt.Println("Time for building proofs:", t1.Sub(t0))
 			fmt.Println("Time for zlib:", t2.Sub(t1))
-			fmt.Println("Time for gzip:", t3.Sub(t2))
-			fmt.Println("Time for flaked:", t4.Sub(t3))
+			// fmt.Println("Time for gzip:", t3.Sub(t2))
+			// fmt.Println("Time for flaked:", t4.Sub(t3))
+			fmt.Println("Time for modifying forest:", t.Sub(t2))
 		}
 
 		// Check if stopSig is no longer false
