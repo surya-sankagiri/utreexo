@@ -97,9 +97,9 @@ func BuildProofs(
 	}
 	datafile.WriteString("Block Number, Uncompressed, zlib, gzip, flate")
 	defer datafile.Close()
-
+	start := time.Now()
 	for ; height != knownTipHeight && !stop; height++ {
-
+		t0 := time.Now()
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
 
@@ -124,7 +124,7 @@ func BuildProofs(
 		// b := ud.ToBytes()
 
 		proofData := ud.AccProof.ToBytes()
-
+		t1 := time.Now()
 		uncompressedLength := len(proofData)
 		// zlib compression
 		var zlibBuf bytes.Buffer
@@ -132,21 +132,25 @@ func BuildProofs(
 		zlibw.Write(proofData)
 		zlibw.Close()
 		zlibLength := len(zlibBuf.Bytes())
+		t2 := time.Now()
 		// gzip compression
 		var gzipBuf bytes.Buffer
 		gzipw := gzip.NewWriter(&gzipBuf)
 		gzipw.Write(proofData)
 		gzipw.Close()
 		gzipLength := len(gzipBuf.Bytes())
+		t3 := time.Now()
 		// flate compression
 		var flateBuf bytes.Buffer
 		flatew, _ := flate.NewWriter(&flateBuf, -1)
 		flatew.Write(proofData)
 		flatew.Close()
 		flateLength := len(flateBuf.Bytes())
+		t4 := time.Now()
 
 		_, err = datafile.WriteString(
-			fmt.Sprintf("%d, %d, %d, %d, %d \n", height, uncompressedLength, zlibLength, gzipLength, flateLength))
+			fmt.Sprintf("%d, %d, %d, %d, %d, \n", height, uncompressedLength, zlibLength, gzipLength, flateLength))
+
 		if err != nil {
 			log.Println(err)
 		}
@@ -171,6 +175,12 @@ func BuildProofs(
 
 		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
+			t := time.Now()
+			fmt.Println("Time elapsed: ", t.Sub(start))
+			fmt.Println("Time for building proofs:", t1.Sub(t0))
+			fmt.Println("Time for zlib:", t2.Sub(t1))
+			fmt.Println("Time for gzip:", t3.Sub(t2))
+			fmt.Println("Time for flaked:", t4.Sub(t3))
 		}
 
 		// Check if stopSig is no longer false
