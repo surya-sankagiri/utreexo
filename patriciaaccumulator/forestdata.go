@@ -4,22 +4,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 // Size of a hash and a patricia node 32 + 2 * 32 + 8
 const slotSize = 104
-
-// diskTreeNodes is a disk backed key value store from hashes to patricia nodes
-// for the lookup.
-// originally, we had this as a golang map, but we realized, as the original
-// UTREEXO team did, that it was infeasible to store the whole thing in RAM.
-// Thus, we created this.
-// Our design is somwhat different. In the original UTREEXO a hash's location in the file corresponded directly with its location in the tree.
-// Here instead, we combine the positionMap in
-type diskTreeNodes struct {
-	file     *os.File
-	indexMap map[MiniHash]uint64
-}
 
 // ForestData is the thing that holds all the hashes in the forest.  Could
 // be in a file, or in ram, or maybe something else.
@@ -35,13 +25,112 @@ type ForestData interface {
 	close()
 }
 
+// A treenodes with a ram cache. Every entry exists in either the disk or the ram, not both
+type ramCacheTreeNodes struct {
+	disk        diskTreeNodes
+	ram         *lru.Cache
+	maxRAMElems int
+}
+
+// newRamCacheTreeNodes returns a new treenodes container with a ram cache
+func newRAMCacheTreeNodes(file *os.File, maxRAMElems int) ramCacheTreeNodes {
+	cache, err := lru.New(maxRAMElems)
+	if err != nil {
+		panic("Error making cache")
+	}
+	return ramCacheTreeNodes{newDiskTreeNodes(file), cache, maxRAMElems}
+}
+
+// read ignores errors. Probably get an empty hash if it doesn't work
+func (d ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
+
+	val, ok := d.ram.Get(hash)
+	if ok {
+		// In memory
+		return val.(patriciaNode), ok
+	}
+	// If not in memory, read disk
+	return d.disk.read(hash)
+
+}
+
+// write writes a key-value pair
+func (d ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
+
+	inRAM := d.ram.Contains(hash)
+
+	if inRAM {
+		// Already in ram, we are done
+		// d.ram[hash] = node
+		return
+	}
+
+	_, ok := d.disk.read(hash)
+	if ok {
+		// Already in disk, done
+		return
+	}
+
+	// Not in ram or disk
+	if d.ram.Len() < d.maxRAMElems {
+		// Enough space, just write to ram
+		d.ram.Add(hash, node)
+	} else {
+		// Not enough space, move something in ram to disk
+		oldHash, oldNode, ok := d.ram.RemoveOldest()
+		if !ok {
+			panic("Should not be empty")
+		}
+		d.disk.write(oldHash.(Hash), oldNode.(patriciaNode))
+		d.ram.Add(hash, node)
+
+	}
+}
+
+func (d ramCacheTreeNodes) delete(hash Hash) {
+
+	// Delete from ram
+	present := d.ram.Remove(hash)
+
+	if !present {
+		// Delete from disk
+		d.disk.delete(hash)
+	}
+}
+
+// size gives you the size of the forest
+func (d ramCacheTreeNodes) size() uint64 {
+	return d.disk.size() + uint64(d.ram.Len())
+}
+
+func (d ramCacheTreeNodes) close() {
+	d.disk.close()
+}
+
+// diskTreeNodes is a disk backed key value store from hashes to patricia nodes
+// for the lookup.
+// originally, we had this as a golang map, but we realized, as the original
+// UTREEXO team did, that it was infeasible to store the whole thing in RAM.
+// Thus, we created this.
+// Our design is somwhat different. In the original UTREEXO a hash's location in the file corresponded directly with its location in the tree.
+// Here instead, we combine the positionMap in
+type diskTreeNodes struct {
+	file     *os.File
+	indexMap map[MiniHash]uint64
+}
+
+// newDiskTreeNodes makes a new file-backed tree nodes container
+func newDiskTreeNodes(file *os.File) diskTreeNodes {
+	return diskTreeNodes{file, make(map[MiniHash]uint64)}
+}
+
 // ********************************************* forest on disk
 // type diskForestData struct {
 // 	file *os.File
 // }
 
 // read ignores errors. Probably get an empty hash if it doesn't work
-func (d *diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
+func (d diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	var slotBytes [slotSize]byte
 	var nodeHash, left, right Hash
 
@@ -71,7 +160,7 @@ func (d *diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 }
 
 // write writes a key-value pair
-func (d *diskTreeNodes) write(hash Hash, node patriciaNode) {
+func (d diskTreeNodes) write(hash Hash, node patriciaNode) {
 	s, err := d.file.Stat()
 	elems := s.Size() / slotSize
 	if err != nil {
@@ -107,7 +196,7 @@ func (d *diskTreeNodes) write(hash Hash, node patriciaNode) {
 
 }
 
-func (d *diskTreeNodes) delete(hash Hash) {
+func (d diskTreeNodes) delete(hash Hash) {
 	s, err := d.file.Stat()
 	elems := s.Size() / slotSize
 
@@ -146,46 +235,8 @@ func (d *diskTreeNodes) delete(hash Hash) {
 
 }
 
-// // swapHash swaps 2 hashes.  Don't go out of bounds.
-// func (d *diskForestData) swapHash(a, b uint64) {
-// 	ha := d.read(a)
-// 	hb := d.read(b)
-// 	d.write(a, hb)
-// 	d.write(b, ha)
-// }
-
-// // swapHashRange swaps 2 continuous ranges of hashes.  Don't go out of bounds.
-// // uses lots of ram to make only 3 disk seeks (depending on how you count? 4?)
-// // seek to a start, read a, seek to b start, read b, write b, seek to a, write a
-// // depends if you count seeking from b-end to b-start as a seek. or if you have
-// // like read & replace as one operation or something.
-// func (d *diskForestData) swapHashRange(a, b, w uint64) {
-// 	arange := make([]byte, leafSize*w)
-// 	brange := make([]byte, leafSize*w)
-// 	_, err := d.file.ReadAt(arange, int64(a*leafSize)) // read at a
-// 	if err != nil {
-// 		fmt.Printf("\tshr WARNING!! read pos %d len %d %s\n",
-// 			a*leafSize, w, err.Error())
-// 	}
-// 	_, err = d.file.ReadAt(brange, int64(b*leafSize)) // read at b
-// 	if err != nil {
-// 		fmt.Printf("\tshr WARNING!! read pos %d len %d %s\n",
-// 			b*leafSize, w, err.Error())
-// 	}
-// 	_, err = d.file.WriteAt(arange, int64(b*leafSize)) // write arange to b
-// 	if err != nil {
-// 		fmt.Printf("\tshr WARNING!! write pos %d len %d %s\n",
-// 			b*leafSize, w, err.Error())
-// 	}
-// 	_, err = d.file.WriteAt(brange, int64(a*leafSize)) // write brange to a
-// 	if err != nil {
-// 		fmt.Printf("\tshr WARNING!! write pos %d len %d %s\n",
-// 			a*leafSize, w, err.Error())
-// 	}
-// }
-
 // size gives you the size of the forest
-func (d *diskTreeNodes) size() uint64 {
+func (d diskTreeNodes) size() uint64 {
 	s, err := d.file.Stat()
 	if err != nil {
 		fmt.Printf("\tWARNING: %s. Returning 0", err.Error())
@@ -194,15 +245,7 @@ func (d *diskTreeNodes) size() uint64 {
 	return uint64(s.Size() / slotSize)
 }
 
-// // resize makes the forest bigger (never gets smaller so don't try)
-// func (d *diskForestData) resize(newSize uint64) {
-// 	err := d.file.Truncate(int64(newSize * leafSize * 2))
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// }
-
-func (d *diskTreeNodes) close() {
+func (d diskTreeNodes) close() {
 	err := d.file.Close()
 	if err != nil {
 		fmt.Printf("diskForestData close error: %s\n", err.Error())

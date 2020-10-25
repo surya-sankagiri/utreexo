@@ -97,7 +97,7 @@ type Forest struct {
 
 type patriciaLookup struct {
 	stateRoot     Hash
-	treeNodes     diskTreeNodes
+	treeNodes     ForestData
 	leafLocations map[Hash]uint64
 }
 
@@ -760,25 +760,27 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 	f.numLeaves = 0
 	f.maxLeaf = 0
 
-	f.lookup = patriciaLookup{Hash{}, diskTreeNodes{}, make(map[Hash]uint64)}
-
 	if forestFile == nil {
 		// for in-ram
 		// f.data = new(ramForestData)
-		panic("We arent doing ram")
+		panic("We aren't doing ram")
 	} else {
 		// panic("We cannot yet create a forest from cache or memory")
 
 		if cached {
-			panic("We dont do this either")
+			panic("We don't do this either")
 			// d := new(cacheForestData)
 			// d.file = forestFile
 			// d.cache = newDiskForestCache(20)
 			// f.data = d
 		} else {
-			// for on-disk
-			f.lookup.treeNodes.file = forestFile
-			f.lookup.treeNodes.indexMap = make(map[MiniHash]uint64)
+			// for on-disk with cache
+			// Max 10000 elems in ram to start
+			treeNodes := newRAMCacheTreeNodes(forestFile, 10000)
+			// for on disk
+			// treeNodes := newDiskTreeNodes(forestFile)
+
+			f.lookup = patriciaLookup{Hash{}, treeNodes, make(map[Hash]uint64)}
 
 		}
 	}
