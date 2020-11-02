@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -197,6 +198,7 @@ func (d diskTreeNodes) write(hash Hash, node patriciaNode) {
 }
 
 func (d diskTreeNodes) delete(hash Hash) {
+	start := time.Now()
 	s, err := d.file.Stat()
 	elems := s.Size() / slotSize
 
@@ -210,25 +212,29 @@ func (d diskTreeNodes) delete(hash Hash) {
 
 	var endhash, left, right Hash
 	var midpointBytes [8]byte
+	prelims := time.Now()
 	_, err = d.file.ReadAt(endhash[:], int64((elems-1)*slotSize))
 	_, err = d.file.ReadAt(left[:], int64((elems-1)*slotSize+32))
 	_, err = d.file.ReadAt(right[:], int64((elems-1)*slotSize+64))
 	_, err = d.file.ReadAt(midpointBytes[:], int64((elems-1)*slotSize+96))
-
+	readEnd := time.Now()
 	// write to the overwritten slot
 
 	_, err = d.file.WriteAt(endhash[:], int64(index*slotSize))
 	_, err = d.file.WriteAt(left[:], int64(index*slotSize+32))
 	_, err = d.file.WriteAt(right[:], int64(index*slotSize+64))
 	_, err = d.file.WriteAt(midpointBytes[:], int64(index*slotSize+96))
-
+	writeEnd := time.Now()
 	// Update the index
 	d.indexMap[endhash.Mini()] = index
 
 	delete(d.indexMap, hash.Mini())
-
+	truncateBegin := time.Now()
 	err = d.file.Truncate(int64((elems - 1) * slotSize))
-
+	end := time.Now()
+	if left[0] == right[0] { //random condition
+		fmt.Println("Time for prelims:", prelims.Sub(start), "for reads:", readEnd.Sub(prelims), "for writes:", writeEnd.Sub(readEnd), "for truncate:", end.Sub(truncateBegin))
+	}
 	if err != nil {
 		fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
 	}
