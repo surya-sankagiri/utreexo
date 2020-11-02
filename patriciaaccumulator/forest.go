@@ -547,8 +547,8 @@ func filterDelete(a []Hash, val Hash) {
 }
 
 // Adds a hash at a particular location and returns the new state root
-func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
-
+func (t *patriciaLookup) add(location uint64, toAdd Hash, printStuff bool) error {
+	start := time.Now()
 	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
@@ -581,7 +581,8 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	var neighbor patriciaNode
 	neighborBranch := make([]patriciaNode, 0, 64)
 	mainBranch := make([]patriciaNode, 0, 64)
-
+	var depth int8
+	depth = 0
 	// We descend the tree until we find a node which does not contain the location at which we are adding
 	// This node should be the sibling of the new leaf
 	for node.inRange(location) {
@@ -606,9 +607,9 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 		neighborBranch = append(neighborBranch, neighbor)
 		// Update node down the tree
 		node, _ = t.treeNodes.read(hash)
-
+		depth = depth + 1
 	} // End loop
-
+	readTime := time.Now()
 	// Combine leaf node with its new sibling
 	nodeToAdd := newPatriciaNode(newLeafNode, node)
 	t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
@@ -622,20 +623,24 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
 		t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
 	}
+	writeTime := time.Now()
 	// Delete all nodes in the main branch, they have been replaced
 	for _, node := range mainBranch {
 		t.treeNodes.delete(node.hash())
 	}
-
+	deleteTime := time.Now()
 	// The new state root is the hash of the last node added
 	t.stateRoot = nodeToAdd.hash()
 	// fmt.Println("new root midpoint is", nodeToAdd.midpoint)
+	if printStuff {
+		fmt.Println("Time to add depth", depth, "UTXO:", deleteTime.Sub(start), "Read", readTime.Sub(start), "Delete", deleteTime.Sub(writeTime), "Write", writeTime.Sub(readTime))
+	}
 
 	return nil
 }
 
 // Based on add above: this code removes a location
-func (t *patriciaLookup) remove(location uint64) {
+func (t *patriciaLookup) remove(location uint64, printStuff bool) {
 
 	// TODO: should state root be a property of patriciaLookup, and we avoid a single lookup representing multiple roots?
 	// TODO: Should the proof branch be the input, so this can be called without appatriciaLookup by a stateless node
@@ -648,7 +653,7 @@ func (t *patriciaLookup) remove(location uint64) {
 	if t.stateRoot == empty {
 		panic("State root is empty hash")
 	}
-
+	start := time.Now()
 	node, ok := t.treeNodes.read(t.stateRoot)
 	if !ok {
 		panic(fmt.Sprint("Could not find root ", t.stateRoot[:6], " in nodes"))
@@ -658,6 +663,8 @@ func (t *patriciaLookup) remove(location uint64) {
 	var neighbor patriciaNode
 	neighborBranch := make([]patriciaNode, 0, 64)
 	mainBranch := make([]patriciaNode, 0, 64)
+	var depth int8
+	depth = 0
 
 	// We descend the tree until we find a leaf node
 	// This node should be the sibling of the new leaf
@@ -678,8 +685,9 @@ func (t *patriciaLookup) remove(location uint64) {
 		// Update node down the tree
 		node, _ = t.treeNodes.read(hash)
 		// fmt.Printf("midpoint %d\n", node.midpoint)
-
+		depth = depth + 1
 	} // End loop
+	readTime := time.Now()
 	mainBranch = append(mainBranch, node)
 
 	// Check that the leaf node we found has the right location
@@ -691,7 +699,7 @@ func (t *patriciaLookup) remove(location uint64) {
 	for _, node := range mainBranch {
 		t.treeNodes.delete(node.hash())
 	}
-
+	deleteTime := time.Now()
 	// If there are no elements in the neighbor nodes, the leaf we deleted was the root
 	// The root becomes empty
 	if len(neighborBranch) == 0 {
@@ -724,16 +732,18 @@ func (t *patriciaLookup) remove(location uint64) {
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
 		t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
 	}
-
+	writeTime := time.Now()
 	// The new state root is the hash of the last node added
 	t.stateRoot = nodeToAdd.hash()
 	// fmt.Println("new root hash is", t.stateRoot[:6])
-
+	if printStuff {
+		fmt.Println("Time to delete depth", depth, "UTXO:", writeTime.Sub(start), "Read", readTime.Sub(start), "Delete", deleteTime.Sub(readTime), "Write", writeTime.Sub(deleteTime))
+	}
+	return
 }
 
 // Delete the leaves at the locations for the trie forest
 func (f *Forest) removev5(locations []uint64) error {
-	start := time.Now()
 	if f.numLeaves < uint64(len(locations)) {
 		panic(fmt.Sprintf("Attempting to delete %v nodes, only %v exist", len(locations), f.numLeaves))
 	}
@@ -746,11 +756,7 @@ func (f *Forest) removev5(locations []uint64) error {
 				"Trying to delete leaf at %d, beyond max %d", location, f.maxLeaf)
 		}
 
-		f.lookup.remove(location)
-	}
-	end := time.Now()
-	if len(locations) > 100 {
-		fmt.Println("Time to delete", len(locations), "UTXOs:", end.Sub(start))
+		f.lookup.remove(location, len(locations) > 100)
 	}
 	f.numLeaves = nextNumLeaves
 
@@ -780,7 +786,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		} else {
 			// for on-disk with cache
 			// Max 10000 elems in ram to start
-			treeNodes := newRAMCacheTreeNodes(forestFile, 10000)
+			treeNodes := newRAMCacheTreeNodes(forestFile, 1)
 			// for on disk
 			// treeNodes := newDiskTreeNodes(forestFile)
 
@@ -1073,22 +1079,16 @@ func makeDestInRow(maybeArrow []arrow, hashDirt []uint64, rows uint8) (bool, uin
 
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) addv2(adds []Leaf) error {
-	start := time.Now()
 	for _, add := range adds {
-
 		// f.lookup.printAll()
 
-		err := f.lookup.add(f.maxLeaf, add.Hash)
+		err := f.lookup.add(f.maxLeaf, add.Hash, len(adds) > 30)
 		if err != nil {
 			return err
 		}
 
 		f.maxLeaf++
 		f.numLeaves++
-	}
-	end := time.Now()
-	if len(adds) > 100 {
-		fmt.Println("Time to add", len(adds), "UTXOs:", end.Sub(start))
 	}
 
 	return nil
