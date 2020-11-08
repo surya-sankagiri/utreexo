@@ -548,13 +548,15 @@ func filterDelete(a []Hash, val Hash) {
 
 // Adds a hash at a particular location and returns the new state root
 func (t *patriciaLookup) add(location uint64, toAdd Hash, printStuff bool) error {
-	start := time.Now()
+	//start := time.Now()
 	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
 
 	// Add the new leaf node
 	newLeafNode := patriciaNode{toAdd, toAdd, location}
-	t.treeNodes.write(newLeafNode.hash(), newLeafNode)
+	//NEW DISK IMPLEMENTATION EDIT
+	//t.treeNodes.write(newLeafNode.hash(), newLeafNode)
+	t.treeNodes.write(newLeafNode)
 	t.leafLocations[toAdd] = location
 
 	// fmt.Println("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting")
@@ -609,10 +611,12 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash, printStuff bool) error
 		node, _ = t.treeNodes.read(hash)
 		depth = depth + 1
 	} // End loop
-	readTime := time.Now()
+	//readTime := time.Now()
 	// Combine leaf node with its new sibling
 	nodeToAdd := newPatriciaNode(newLeafNode, node)
-	t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+	//NEW DISK IMPLEMENTATION EDIT
+	// t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+	t.treeNodes.write(nodeToAdd)
 
 	// We travel up the branch, recombining nodes
 	for len(neighborBranch) > 0 {
@@ -621,19 +625,23 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash, printStuff bool) error
 		neighborNode := neighborBranch[len(neighborBranch)-1]
 		neighborBranch = neighborBranch[:len(neighborBranch)-1]
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
-		t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+		//NEW DISK IMPLEMENTATION EDIT
+		//t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+		t.treeNodes.write(nodeToAdd)
 	}
-	writeTime := time.Now()
+	//writeTime := time.Now()
 	// Delete all nodes in the main branch, they have been replaced
-	for _, node := range mainBranch {
-		t.treeNodes.delete(node.hash())
-	}
-	deleteTime := time.Now()
+	// for _, node := range mainBranch {
+	// 	//NEW DISK IMPLEMENTATION EDIT
+	// 	// t.treeNodes.delete(node.hash())
+	// 	t.treeNodes.delete(node)
+	// }
+	// deleteTime := time.Now()
 	// The new state root is the hash of the last node added
 	t.stateRoot = nodeToAdd.hash()
 	// fmt.Println("new root midpoint is", nodeToAdd.midpoint)
 	if printStuff {
-		fmt.Println("Time to add depth", depth, "UTXO:", deleteTime.Sub(start), "Read", readTime.Sub(start), "Delete", deleteTime.Sub(writeTime), "Write", writeTime.Sub(readTime))
+		//	fmt.Println("Time to add depth", depth, "UTXO:", deleteTime.Sub(start), "Read", readTime.Sub(start), "Delete", deleteTime.Sub(writeTime), "Write", writeTime.Sub(readTime))
 	}
 
 	return nil
@@ -653,7 +661,7 @@ func (t *patriciaLookup) remove(location uint64, printStuff bool) {
 	if t.stateRoot == empty {
 		panic("State root is empty hash")
 	}
-	start := time.Now()
+	//start := time.Now()
 	node, ok := t.treeNodes.read(t.stateRoot)
 	if !ok {
 		panic(fmt.Sprint("Could not find root ", t.stateRoot[:6], " in nodes"))
@@ -687,19 +695,24 @@ func (t *patriciaLookup) remove(location uint64, printStuff bool) {
 		// fmt.Printf("midpoint %d\n", node.midpoint)
 		depth = depth + 1
 	} // End loop
-	readTime := time.Now()
-	mainBranch = append(mainBranch, node)
+	//readTime := time.Now()
+	//mainBranch = append(mainBranch, node)
 
 	// Check that the leaf node we found has the right location
 	if node.midpoint != location {
 		panic(fmt.Sprintf("Found wrong location in remove, location is %d, but midpoint is %d", location, node.midpoint))
 	}
-
-	// Delete all nodes in the main branch, they are to be replaced
-	for _, node := range mainBranch {
-		t.treeNodes.delete(node.hash())
+	t.treeNodes.delete(node) //delete the leaf
+	if len(mainBranch) > 0 {
+		t.treeNodes.delete(mainBranch[len(mainBranch)-1])
 	}
-	deleteTime := time.Now()
+	// Delete all nodes in the main branch, they are to be replaced
+	// for _, node := range mainBranch {
+	// 	//NEW DISK IMPLEMENTATION EDIT
+	// 	// t.treeNodes.delete(node.hash())
+	// 	t.treeNodes.delete(node)
+	// }
+	// deleteTime := time.Now()
 	// If there are no elements in the neighbor nodes, the leaf we deleted was the root
 	// The root becomes empty
 	if len(neighborBranch) == 0 {
@@ -722,7 +735,9 @@ func (t *patriciaLookup) remove(location uint64, printStuff bool) {
 	// That is, the last two nodes in the neighborBranch
 	nodeToAdd := newPatriciaNode(neighborBranch[len(neighborBranch)-1], neighborBranch[len(neighborBranch)-2])
 	neighborBranch = neighborBranch[:len(neighborBranch)-2]
-	t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+	//NEW DISK IMPLEMENTATION EDIT
+	// t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+	t.treeNodes.write(nodeToAdd)
 
 	// We travel up the branch, recombining nodes
 	for len(neighborBranch) > 0 {
@@ -730,14 +745,16 @@ func (t *patriciaLookup) remove(location uint64, printStuff bool) {
 		neighborNode := neighborBranch[len(neighborBranch)-1]
 		neighborBranch = neighborBranch[:len(neighborBranch)-1]
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
-		t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+		//NEW DISK IMPLEMENTATION EDIT
+		//t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+		t.treeNodes.write(nodeToAdd)
 	}
-	writeTime := time.Now()
+	//writeTime := time.Now()
 	// The new state root is the hash of the last node added
 	t.stateRoot = nodeToAdd.hash()
 	// fmt.Println("new root hash is", t.stateRoot[:6])
 	if printStuff {
-		fmt.Println("Time to delete depth", depth, "UTXO:", writeTime.Sub(start), "Read", readTime.Sub(start), "Delete", deleteTime.Sub(readTime), "Write", writeTime.Sub(deleteTime))
+		//	fmt.Println("Time to delete depth", depth, "UTXO:", writeTime.Sub(start), "Read", readTime.Sub(start), "Delete", deleteTime.Sub(readTime), "Write", writeTime.Sub(deleteTime))
 	}
 	return
 }

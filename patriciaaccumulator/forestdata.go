@@ -14,12 +14,14 @@ const slotSize = 104
 // ForestData is the thing that holds all the hashes in the forest.  Could
 // be in a file, or in ram, or maybe something else.
 type ForestData interface {
-	read(hash Hash) (patriciaNode, bool)
+	read(hash Hash) (patriciaNode, bool) // ~ 5 us
 	// TODO we only ever write a node to its own hash, so get rid of first argument
 	// NEW DISK IMPLEMENTATION EDIT
 	// write(hash Hash, node patriciaNode)
-	write(node patriciaNode)
-	delete(hash Hash)
+	write(node patriciaNode) // ~ 20 us
+	// NEW DISK IMPLEMENTATION EDIT
+	// delete(hash Hash)
+	delete(node patriciaNode) // ~300 us -> 800 us
 	// swapHash(a, b uint64)
 	// swapHashRange(a, b, w uint64)
 	size() uint64
@@ -79,7 +81,9 @@ func (d ramCacheTreeNodes) write(node patriciaNode) { //NEW DISK IMPLEMENTATION 
 		d.ram.Add(hash, node)
 	} else {
 		// Not enough space, move something in ram to disk
-		oldHash, oldNode, ok := d.ram.RemoveOldest()
+		// NEW DISK IMPLEMENTATION EDIT
+		// oldHash, oldNode, ok := d.ram.RemoveOldest()
+		_, oldNode, ok := d.ram.RemoveOldest()
 		if !ok {
 			panic("Should not be empty")
 		}
@@ -290,27 +294,25 @@ func (d diskTreeNodes) write(node patriciaNode) {
 	// check if this hash is already present in hashMidpointMap or not; it shouldn't be
 	_, ok := d.hashMidpointMap[hash.Mini()]
 	if ok {
-		panic("Use re-write function instead")
+		panic("Node already present; no need to write")
 	}
 	// check if new node is a leaf
 	leaf := node.left == node.right
+	mpl := midpointLeaf{node.midpoint, leaf}
 	// check if this midpoint is already present in leafIndexMap or not; it shouldn't be
-	_, ok = d.midpointIndexMap[midpointLeaf{node.midpoint, leaf}]
-	if ok {
-		if leaf {
-			panic("Leaf already present")
+	index, replacement := d.midpointIndexMap[mpl]
+	if replacement && leaf {
+		panic("Leaf node should never be replaced")
+	} else if !replacement {
+		// if there is an empty spot, add the midpoint there, else add it to the end of the file
+		if len(d.emptyIndices) > 0 {
+			index, d.emptyIndices = d.emptyIndices[0], d.emptyIndices[1:] //use the first index in the list of empty indices, remove it from list of removed
 		} else {
-			panic("Use re-write function instead")
-		}
-	}
-	// if there is an empty spot, add the midpoint there, else add it to the end of the file
-	if len(d.emptyIndices) > 0 {
-		index, d.emptyIndices = d.emptyIndices[0], d.emptyIndices[1:] //use the first index in the list of empty indices, remove it from list of removed
-	} else {
-		index = d.size()
-		err := d.file.Truncate(int64((index + 1) * slotSize))
-		if err != nil {
-			panic(err)
+			index = d.size()
+			err := d.file.Truncate(int64((index + 1) * slotSize))
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 	//do the actual writing to memory
@@ -333,12 +335,18 @@ func (d diskTreeNodes) write(node patriciaNode) {
 		panic(err)
 	}
 	// Update the maps
-	d.midpointIndexMap[midpointLeaf{node.midpoint, leaf}] = index
+	if replacement {
+		oldNode, _ := d.readMidpoint(mpl)
+		delete(d.hashMidpointMap, oldNode.hash().Mini())
+	} else {
+		d.midpointIndexMap[midpointLeaf{node.midpoint, leaf}] = index
+	}
 	d.hashMidpointMap[hash.Mini()] = midpointLeaf{node.midpoint, leaf}
 
 }
 
 // rewrite writes a PatriciaNode to memory where the midpoint pre-existed
+/*
 func (d diskTreeNodes) rewrite(node patriciaNode, oldHash MiniHash) {
 	hash := node.hash()
 	// check that the node is a leaf or not; it shouldn't be
@@ -381,13 +389,14 @@ func (d diskTreeNodes) rewrite(node patriciaNode, oldHash MiniHash) {
 	delete(d.hashMidpointMap, oldHash)
 	d.hashMidpointMap[hash.Mini()] = midpointLeaf{node.midpoint, leaf}
 }
-
+*/
 // read reads a PatriciaNode from memory, given the hash
 func (d diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	mpl, ok := d.hashMidpointMap[hash.Mini()]
 	// not in hashMidpointMap so not present
 	if !ok {
-		panic("ReadError: Hash not present")
+		fmt.Println("ReadError: Hash not present", hash)
+		return patriciaNode{}, false
 	}
 	return d.readMidpoint(mpl)
 }
@@ -399,7 +408,8 @@ func (d diskTreeNodes) readMidpoint(mpl midpointLeaf) (patriciaNode, bool) {
 	index, ok := d.midpointIndexMap[mpl]
 	// not in midpointIndexMap so not present
 	if !ok {
-		panic("ReadError: Midpoint not present")
+		fmt.Println("ReadError: Midpoint not present", mpl.midpoint)
+		return patriciaNode{}, false
 	}
 
 	_, err := d.file.ReadAt(slotBytes[:], int64(index*slotSize))
@@ -441,9 +451,9 @@ func (d diskTreeNodes) delete(node patriciaNode) { // in principle, we only need
 		panic("TBD hash not present")
 	}
 
-	// check if the midpoints match
-	if mpl.midpoint != node.midpoint {
-		panic("midpoints mismatched!")
+	// check if the midpointLeafs match
+	if mpl.midpoint != node.midpoint || mpl.leaf != leaf {
+		panic("midpointLeafs mismatched!")
 	}
 	//edit the hashmaps
 	delete(d.midpointIndexMap, mpl)
