@@ -95,6 +95,8 @@ type Forest struct {
 
 // TODO: It seems capitalized structs are exported. Should this be the case for the structs we define?
 
+// TODO abstract out a range type for the midpoint
+
 type patriciaLookup struct {
 	stateRoot     Hash
 	treeNodes     ForestData
@@ -772,12 +774,60 @@ func (t *patriciaLookup) remove(location uint64, printStuff bool) {
 	return
 }
 
+// // removeFromSubtree takes a sorted list of locations, and deletes them from the tree
+// // returns the hash of the new parent node (to replace the input hash)
+// // TODO make method of lookup
+// func (f *Forest) removeFromSubtree(locations []uint64, hash Hash) (Hash, error) {
+
+// 	if len(locations) == 0 {
+// 		return hash, nil
+// 	}
+
+// 	node, ok := f.lookup.treeNodes.read(hash)
+// 	f.lookup.treeNodes.delete(node)
+
+// 	// TODO check all locations in the right range
+// 	if !node.inRange(locations[0]) || !node.inRange(locations[len(locations)-1]) {
+// 		panic("Not in range, in removeFromSubtree")
+// 	}
+
+// 	var idx int
+// 	for i, location := range locations {
+// 		if location > node.midpoint {
+// 			idx = i
+// 			break
+// 		}
+// 	}
+
+// 	leftLocations := locations[:idx]
+// 	rightLocations := locations[idx:]
+
+// 	// Remove all locations from the left side of the tree
+// 	leftHash, err := f.removeFromSubtree(leftLocations, node.left)
+
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	// Remove all locations from the right side
+// 	rightHash, err := f.removeFromSubtree(rightLocations, node.right)
+
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	// Recompute the new tree node for the parent of both sides
+
+// }
+
 // Delete the leaves at the locations for the trie forest
 func (f *Forest) removev5(locations []uint64) error {
 	if f.numLeaves < uint64(len(locations)) {
 		panic(fmt.Sprintf("Attempting to delete %v nodes, only %v exist", len(locations), f.numLeaves))
 	}
 	nextNumLeaves := f.numLeaves - uint64(len(locations))
+
+	// The genproofs file sorts the targets, so targets should be in order at this point
 
 	// check that all locations are before the maxLeaf
 	for _, location := range locations {
