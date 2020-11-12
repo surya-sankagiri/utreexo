@@ -3,14 +3,20 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+
+	//
 	"runtime/pprof"
 	"runtime/trace"
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
+
+	_ "net/http/pprof"
 
 	bridge "github.com/surya-sankagiri/utreexo/bridgenode"
 	"github.com/surya-sankagiri/utreexo/util"
@@ -52,6 +58,10 @@ var memProfCmd = optionCmd.String("memprof", "",
 	`Enable pprof heap profiling. Usage: 'memprof='path/to/file'`)
 
 func main() {
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	optionCmd.Parse(os.Args[1:])
 

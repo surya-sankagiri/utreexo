@@ -155,10 +155,10 @@ func (p *patriciaNode) inLeft(v uint64) bool {
 }
 
 func (p *patriciaNode) hash() Hash {
-	var empty Hash
-	if p.left == empty || p.right == empty {
-		panic("got an empty leaf here. ")
-	}
+	// var empty Hash
+	// if p.left == empty || p.right == empty {
+	// 	panic("got an empty leaf here. ")
+	// }
 	hashBytes := append(p.left[:], p.right[:]...)
 	midpointBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(midpointBytes, p.midpoint)
@@ -328,6 +328,7 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
 
+	// TODO: Parallelize
 	for _, target := range targets {
 		proof, _ := t.RetrieveProof(target)
 
@@ -682,6 +683,18 @@ func (t *patriciaLookup) remove(location uint64) {
 	} // End loop
 	mainBranch = append(mainBranch, node)
 
+	// node is now the leaf node for the deleted entry
+	// delete the hash from the leaf location map
+	loc, ok := t.leafLocations[node.left]
+
+	if !ok {
+		panic("Didn't find location")
+	}
+	if loc != node.midpoint {
+		panic("Location does not match")
+	}
+	delete(t.leafLocations, node.left)
+
 	// Check that the leaf node we found has the right location
 	if node.midpoint != location {
 		panic(fmt.Sprintf("Found wrong location in remove, location is %d, but midpoint is %d", location, node.midpoint))
@@ -739,9 +752,11 @@ func (f *Forest) removev5(locations []uint64) error {
 	}
 	nextNumLeaves := f.numLeaves - uint64(len(locations))
 
-	// check that all locations are before the maxLeaf
+	// TODO make this more efficient by recursively calling a function that handles the left and right sides separately, then deals with the root.
 	for _, location := range locations {
+
 		if location > f.maxLeaf {
+			// check that all locations are before the maxLeaf
 			return fmt.Errorf(
 				"Trying to delete leaf at %d, beyond max %d", location, f.maxLeaf)
 		}
@@ -780,11 +795,44 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		} else {
 			// for on-disk with cache
 			// Max 10000 elems in ram to start
-			treeNodes := newRAMCacheTreeNodes(forestFile, 10000)
+			// treeNodes := newRAMCacheTreeNodes(forestFile, 100)
 			// for on disk
-			// treeNodes := newDiskTreeNodes(forestFile)
+			treeNodes := newDiskTreeNodes(forestFile)
+			// for bitcask/diskv
+			// treeNodes := newdbTreeNodes()
 
-			f.lookup = patriciaLookup{Hash{}, treeNodes, make(map[Hash]uint64)}
+			// TODO move this code to a test file
+			// if treeNodes.size() != 0 {
+			// 	panic("")
+			// }
+
+			// node := patriciaNode{empty, empty, 0}
+
+			// treeNodes.write(node.hash(), node)
+
+			// if treeNodes.size() != 1 {
+			// 	fmt.Println("", treeNodes.size(), treeNodes.filePopulatedTo, len(treeNodes.emptySlots))
+			// 	panic("Size not 1 after write")
+			// }
+
+			// treeNodes.read(node.hash())
+
+			// if treeNodes.size() != 1 {
+			// 	panic("Size not 1 after write then read")
+			// }
+
+			// treeNodes.delete(node.hash())
+
+			// if treeNodes.size() != 0 {
+			// 	panic("")
+			// }
+
+			f.lookup = patriciaLookup{Hash{}, &treeNodes, make(map[Hash]uint64)}
+			// Changed this to a reference
+			// This code runs, but I don't understand why.
+			// Shouldn't treeNodes be overwritten when it goes out of scope?
+			// I guess it's actually idiomatic
+			// https://stackoverflow.com/a/28485041/3854633
 
 		}
 	}
@@ -1144,6 +1192,8 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 			return nil, fmt.Errorf("Can't add empty (all 0s) leaf to accumulator")
 		}
 	}
+
+	// fmt.Println("empty slots", len(f.lookup.treeNodes.emptySlots))
 	// // remap to expand the forest if needed
 	// for int64(f.numLeaves)+delta > int64(1<<f.rows) {
 	// 	// fmt.Printf("current cap %d need %d\n",

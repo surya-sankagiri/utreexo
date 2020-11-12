@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
 	"sync"
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	accumulator "github.com/surya-sankagiri/utreexo/accumulator"
+	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 
 	"github.com/surya-sankagiri/utreexo/util"
 
@@ -180,6 +181,11 @@ func BuildProofs(
 			// fmt.Println("Time for gzip:", t3.Sub(t2))
 			// fmt.Println("Time for flaked:", t4.Sub(t3))
 			fmt.Println("Time for modifying forest:", t.Sub(t2))
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			fmt.Println("Alloc:", m.Alloc,
+				"TotalAlloc:", m.TotalAlloc,
+				"HeapAlloc:", m.HeapAlloc)
 		}
 
 		// Check if stopSig is no longer false
