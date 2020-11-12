@@ -587,6 +587,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash, printStuff bool) error
 	depth = 0
 	// We descend the tree until we find a node which does not contain the location at which we are adding
 	// This node should be the sibling of the new leaf
+	// println(location)
 	for node.inRange(location) {
 		// mainBranch will consist of all the nodes to be replaced, from the root to the parent of the new sibling of the new leaf
 		mainBranch = append(mainBranch, node)
@@ -608,6 +609,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash, printStuff bool) error
 		// Add the other direction node to the branch
 		neighborBranch = append(neighborBranch, neighbor)
 		// Update node down the tree
+		// fmt.Println("depth, midpoint, left, right:", depth, node.midpoint, node.left, node.right)
 		node, _ = t.treeNodes.read(hash)
 		depth = depth + 1
 	} // End loop
@@ -702,9 +704,16 @@ func (t *patriciaLookup) remove(location uint64, printStuff bool) {
 	if node.midpoint != location {
 		panic(fmt.Sprintf("Found wrong location in remove, location is %d, but midpoint is %d", location, node.midpoint))
 	}
+	hashToDelete := node.left
+	delete(t.leafLocations, hashToDelete)
+	// fmt.Println("deleted node with hash", node.hash(), node.midpoint)
 	t.treeNodes.delete(node) //delete the leaf
+
 	if len(mainBranch) > 0 {
-		t.treeNodes.delete(mainBranch[len(mainBranch)-1])
+		node = mainBranch[len(mainBranch)-1]
+		// fmt.Println("deleted node with hash", node.hash(), node.midpoint)
+		t.treeNodes.delete(node)
+
 	}
 	// Delete all nodes in the main branch, they are to be replaced
 	// for _, node := range mainBranch {
@@ -735,9 +744,11 @@ func (t *patriciaLookup) remove(location uint64, printStuff bool) {
 	// That is, the last two nodes in the neighborBranch
 	nodeToAdd := newPatriciaNode(neighborBranch[len(neighborBranch)-1], neighborBranch[len(neighborBranch)-2])
 	neighborBranch = neighborBranch[:len(neighborBranch)-2]
-	//NEW DISK IMPLEMENTATION EDIT
+	// NEW DISK IMPLEMENTATION EDIT
 	// t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+	// fmt.Println("rewriting in delete:", nodeToAdd.midpoint, nodeToAdd.left, nodeToAdd.right)
 	t.treeNodes.write(nodeToAdd)
+	// fmt.Println("rewrote node: midpoint", nodeToAdd.midpoint, "left", nodeToAdd.left, "right", nodeToAdd.right)
 
 	// We travel up the branch, recombining nodes
 	for len(neighborBranch) > 0 {
@@ -745,9 +756,11 @@ func (t *patriciaLookup) remove(location uint64, printStuff bool) {
 		neighborNode := neighborBranch[len(neighborBranch)-1]
 		neighborBranch = neighborBranch[:len(neighborBranch)-1]
 		nodeToAdd = newPatriciaNode(neighborNode, nodeToAdd)
-		//NEW DISK IMPLEMENTATION EDIT
-		//t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+		// NEW DISK IMPLEMENTATION EDIT
+		// t.treeNodes.write(nodeToAdd.hash(), nodeToAdd)
+		// fmt.Println("rewriting in delete:", nodeToAdd.midpoint, nodeToAdd.left, nodeToAdd.right)
 		t.treeNodes.write(nodeToAdd)
+		// fmt.Println("rewrote node: midpoint", nodeToAdd.midpoint, "left", nodeToAdd.left, "right", nodeToAdd.right)
 	}
 	//writeTime := time.Now()
 	// The new state root is the hash of the last node added
@@ -803,11 +816,11 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		} else {
 			// for on-disk with cache
 			// Max 10000 elems in ram to start
-			treeNodes := newRAMCacheTreeNodes(forestFile, 1)
+			// treeNodes := newRAMCacheTreeNodes(forestFile, 10)
 			// for on disk
-			// treeNodes := newDiskTreeNodes(forestFile)
+			treeNodes := newDiskTreeNodes(forestFile)
 
-			f.lookup = patriciaLookup{Hash{}, treeNodes, make(map[Hash]uint64)}
+			f.lookup = patriciaLookup{Hash{}, &treeNodes, make(map[Hash]uint64)}
 
 		}
 	}
@@ -1178,7 +1191,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 		return nil, err
 	}
 	// f.cleanup(uint64(numDels))
-
+	// time.Sleep(1 * time.Second)
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?
 	// BuildUndoData takes all the stuff swapped to the right by removev3
@@ -1191,6 +1204,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	if err != nil {
 		return nil, err
 	}
+	// time.Sleep(1 * time.Second)
 
 	// fmt.Printf("done modifying block, added %d\n", len(adds))
 	// fmt.Printf("post add %s\n", f.ToString())

@@ -46,7 +46,7 @@ func newRAMCacheTreeNodes(file *os.File, maxRAMElems int) ramCacheTreeNodes {
 }
 
 // read ignores errors. Probably get an empty hash if it doesn't work
-func (d ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
+func (d *ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
 
 	val, ok := d.ram.Get(hash)
 	if ok {
@@ -59,20 +59,23 @@ func (d ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
 }
 
 // write writes a key-value pair
-func (d ramCacheTreeNodes) write(node patriciaNode) { //NEW DISK IMPLEMENTATION EDIT //write(hash Hash, node patriciaNode) {
+func (d *ramCacheTreeNodes) write(node patriciaNode) { //NEW DISK IMPLEMENTATION EDIT //write(hash Hash, node patriciaNode) {
 	hash := node.hash()
 	inRAM := d.ram.Contains(hash)
 
 	if inRAM {
 		// Already in ram, we are done
 		// d.ram[hash] = node
-		return
+		panic("Node already present; no need to write")
+		// return
 	}
 
-	_, ok := d.disk.read(hash)
+	// _, ok := d.disk.read(hash)
+	_, ok := d.disk.hashMidpointMap[hash.Mini()]
 	if ok {
 		// Already in disk, done
-		return
+		panic("Node already present; no need to write")
+		// return
 	}
 
 	// Not in ram or disk
@@ -95,7 +98,7 @@ func (d ramCacheTreeNodes) write(node patriciaNode) { //NEW DISK IMPLEMENTATION 
 	}
 }
 
-func (d ramCacheTreeNodes) delete(node patriciaNode) { //NEW DISK IMPLEMENTATION EDIT //delete(hash Hash) {
+func (d *ramCacheTreeNodes) delete(node patriciaNode) { //NEW DISK IMPLEMENTATION EDIT //delete(hash Hash) {
 	//NEW DISK IMPLEMENTATION EDIT
 	hash := node.hash()
 	// Delete from ram
@@ -110,11 +113,11 @@ func (d ramCacheTreeNodes) delete(node patriciaNode) { //NEW DISK IMPLEMENTATION
 }
 
 // size gives you the size of the forest
-func (d ramCacheTreeNodes) size() uint64 {
+func (d *ramCacheTreeNodes) size() uint64 {
 	return d.disk.size() + uint64(d.ram.Len())
 }
 
-func (d ramCacheTreeNodes) close() {
+func (d *ramCacheTreeNodes) close() {
 	d.disk.close()
 }
 
@@ -288,7 +291,8 @@ func newDiskTreeNodes(file *os.File) diskTreeNodes {
 }
 
 // write writes a new PatriciaNode to memory
-func (d diskTreeNodes) write(node patriciaNode) {
+func (d *diskTreeNodes) write(node patriciaNode) {
+	// fmt.Println("writing node: midpoint", node.midpoint, "left", node.left, "right", node.right)
 	var index uint64
 	hash := node.hash()
 	// check if this hash is already present in hashMidpointMap or not; it shouldn't be
@@ -299,11 +303,11 @@ func (d diskTreeNodes) write(node patriciaNode) {
 	// check if new node is a leaf
 	leaf := node.left == node.right
 	mpl := midpointLeaf{node.midpoint, leaf}
-	// check if this midpoint is already present in leafIndexMap or not; it shouldn't be
 	index, replacement := d.midpointIndexMap[mpl]
 	if replacement && leaf {
 		panic("Leaf node should never be replaced")
-	} else if !replacement {
+	}
+	if !replacement {
 		// if there is an empty spot, add the midpoint there, else add it to the end of the file
 		if len(d.emptyIndices) > 0 {
 			index, d.emptyIndices = d.emptyIndices[0], d.emptyIndices[1:] //use the first index in the list of empty indices, remove it from list of removed
@@ -315,6 +319,14 @@ func (d diskTreeNodes) write(node patriciaNode) {
 			}
 		}
 	}
+	// Update the maps
+	if replacement {
+		oldNode, _ := d.readMidpoint(mpl)
+		delete(d.hashMidpointMap, oldNode.hash().Mini())
+	} else {
+		d.midpointIndexMap[midpointLeaf{node.midpoint, leaf}] = index
+	}
+	d.hashMidpointMap[hash.Mini()] = midpointLeaf{node.midpoint, leaf}
 	//do the actual writing to memory
 	_, err := d.file.WriteAt(hash[:], int64(index*slotSize))
 	if err != nil {
@@ -334,15 +346,6 @@ func (d diskTreeNodes) write(node patriciaNode) {
 	if err != nil {
 		panic(err)
 	}
-	// Update the maps
-	if replacement {
-		oldNode, _ := d.readMidpoint(mpl)
-		delete(d.hashMidpointMap, oldNode.hash().Mini())
-	} else {
-		d.midpointIndexMap[midpointLeaf{node.midpoint, leaf}] = index
-	}
-	d.hashMidpointMap[hash.Mini()] = midpointLeaf{node.midpoint, leaf}
-
 }
 
 // rewrite writes a PatriciaNode to memory where the midpoint pre-existed
@@ -391,18 +394,19 @@ func (d diskTreeNodes) rewrite(node patriciaNode, oldHash MiniHash) {
 }
 */
 // read reads a PatriciaNode from memory, given the hash
-func (d diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
+func (d *diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	mpl, ok := d.hashMidpointMap[hash.Mini()]
 	// not in hashMidpointMap so not present
 	if !ok {
 		fmt.Println("ReadError: Hash not present", hash)
+		panic("quitting")
 		return patriciaNode{}, false
 	}
 	return d.readMidpoint(mpl)
 }
 
 // readMidpoint reads a PatriciaNode from memory, given the midpoint
-func (d diskTreeNodes) readMidpoint(mpl midpointLeaf) (patriciaNode, bool) {
+func (d *diskTreeNodes) readMidpoint(mpl midpointLeaf) (patriciaNode, bool) {
 	var slotBytes [slotSize]byte
 	var nodeHash, left, right Hash
 	index, ok := d.midpointIndexMap[mpl]
@@ -437,7 +441,7 @@ func (d diskTreeNodes) readMidpoint(mpl midpointLeaf) (patriciaNode, bool) {
 }
 
 // delete deletes a PatriciaNode from memory and adds the index to emptyIndices
-func (d diskTreeNodes) delete(node patriciaNode) { // in principle, we only need node.hash().Mini() and node.midpoint
+func (d *diskTreeNodes) delete(node patriciaNode) { // in principle, we only need node.hash().Mini() and node.midpoint
 	hash := node.hash()
 	leaf := node.left == node.right
 	// check if this midpoint is already present in midpointIndexMap or not; it should be
@@ -464,7 +468,7 @@ func (d diskTreeNodes) delete(node patriciaNode) { // in principle, we only need
 }
 
 // size gives you the size of the forest
-func (d diskTreeNodes) size() uint64 {
+func (d *diskTreeNodes) size() uint64 {
 	s, err := d.file.Stat()
 	if err != nil {
 		panic(err)
@@ -472,7 +476,7 @@ func (d diskTreeNodes) size() uint64 {
 	return uint64(s.Size() / slotSize)
 }
 
-func (d diskTreeNodes) close() {
+func (d *diskTreeNodes) close() {
 	err := d.file.Close()
 	if err != nil {
 		fmt.Printf("diskTreeNodes close error: %s\n", err.Error())
