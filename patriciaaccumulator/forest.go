@@ -744,6 +744,90 @@ func (t *patriciaLookup) remove(location uint64) {
 
 }
 
+// removeFromSubtree takes a sorted list of locations, and deletes them from the tree
+// returns the hash of the new parent node (to replace the input hash)
+// TODO make method of lookup
+func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash, bool, error) {
+
+	if len(locations) == 0 {
+		return hash, false, nil
+	}
+
+	node, ok := t.treeNodes.read(hash)
+	if !ok {
+		panic("Remove from subtree could not find node")
+	}
+	t.treeNodes.delete(hash)
+
+	// fmt.Println("Removing", locations, node.midpoint, node.left, node.right)
+
+	// TODO check all locations in the right range
+	if !node.inRange(locations[0]) || !node.inRange(locations[len(locations)-1]) {
+		fmt.Println(locations, node.midpoint)
+		panic("Not in range, in removeFromSubtree")
+	}
+
+	var idx int
+	idx = len(locations)
+	for i, location := range locations {
+		if location >= node.midpoint {
+			idx = i
+			break
+		}
+	}
+
+	leftLocations := locations[:idx]
+	rightLocations := locations[idx:]
+
+	// newLeft := node.left
+	// newRight := node.right
+	if node.left == node.right {
+		if len(locations) != 1 {
+			panic("Not 1 element at leaf")
+		}
+		if locations[0] != node.midpoint {
+			panic("Wrong leaf found in remove subtree")
+		}
+		delete(t.leafLocations, node.left)
+		return empty, true, nil
+	}
+
+	// Remove all locations from the left side of the tree
+	newLeft, leftDeleted, err := t.removeFromSubtree(leftLocations, node.left)
+
+	if err != nil {
+		panic(err)
+	}
+
+	// Remove all locations from the right side
+	newRight, rightDeleted, err := t.removeFromSubtree(rightLocations, node.right)
+
+	if err != nil {
+		panic(err)
+	}
+
+	if !leftDeleted && !rightDeleted {
+		// Recompute the new tree node for the parent of both sides
+		newNode := patriciaNode{newLeft, newRight, node.midpoint}
+		newHash := newNode.hash()
+
+		t.treeNodes.write(newHash, newNode)
+
+		return newHash, false, nil
+	}
+	if leftDeleted && !rightDeleted {
+		return newRight, false, nil
+	}
+	if !leftDeleted && rightDeleted {
+		return newLeft, false, nil
+	}
+	if leftDeleted && rightDeleted {
+		return empty, true, nil
+	}
+
+	return empty, true, nil
+}
+
 // Delete the leaves at the locations for the trie forest
 func (f *Forest) removev5(locations []uint64) error {
 	start := time.Now()
@@ -752,17 +836,21 @@ func (f *Forest) removev5(locations []uint64) error {
 	}
 	nextNumLeaves := f.numLeaves - uint64(len(locations))
 
-	// TODO make this more efficient by recursively calling a function that handles the left and right sides separately, then deals with the root.
-	for _, location := range locations {
-
-		if location > f.maxLeaf {
-			// check that all locations are before the maxLeaf
-			return fmt.Errorf(
-				"Trying to delete leaf at %d, beyond max %d", location, f.maxLeaf)
-		}
-
-		f.lookup.remove(location)
+	newRoot, _, err := f.lookup.removeFromSubtree(locations, f.lookup.stateRoot)
+	if err != nil {
+		return err
 	}
+	f.lookup.stateRoot = newRoot
+	// for _, location := range locations {
+
+	// 	if location > f.maxLeaf {
+	// 		// check that all locations are before the maxLeaf
+	// 		return fmt.Errorf(
+	// 			"Trying to delete leaf at %d, beyond max %d", location, f.maxLeaf)
+	// 	}
+
+	// 	f.lookup.remove(location)
+	// }
 	end := time.Now()
 	if len(locations) > 100 {
 		fmt.Println("Time to delete", len(locations), "UTXOs:", end.Sub(start))
