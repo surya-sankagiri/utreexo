@@ -748,7 +748,7 @@ func (t *patriciaLookup) remove(location uint64) {
 
 // removeFromSubtree takes a sorted list of locations, and deletes them from the tree
 // returns the hash of the new parent node (to replace the input hash)
-// TODO make method of lookup
+// also returns whether any elements remain in that subtree
 func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash, bool, error) {
 
 	if len(locations) == 0 {
@@ -763,7 +763,7 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 
 	// fmt.Println("Removing", locations, node.midpoint, node.left, node.right)
 
-	// TODO check all locations in the right range
+	// check all locations in the right range
 	if !node.inRange(locations[0]) || !node.inRange(locations[len(locations)-1]) {
 		fmt.Println(locations, node.midpoint)
 		panic("Not in range, in removeFromSubtree")
@@ -978,6 +978,111 @@ const bridgeVerbose = false
 // get immediately overwritten, or it'll be out to the right, beyond the edge
 // of the forest
 var empty [32]byte
+
+// Adds hashes to the tree under node hash with starting location
+// Returns the new hash of the root to replace the at
+func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds []Hash) (Hash, error) {
+
+	if len(adds) == 0 {
+		return hash, nil
+	}
+
+	node, ok := t.treeNodes.read(hash)
+	if !ok {
+		panic("Remove from subtree could not find node")
+	}
+	t.treeNodes.delete(hash)
+
+	// check all locations in the right range
+	if !node.inRange(startLocation) || !node.inRange(startLocation+uint64(len(adds))) {
+		fmt.Println(adds, node.midpoint)
+		panic("Not in range, in removeFromSubtree")
+	}
+
+	// Determine which nodes are children of the right child
+	rightNode, ok := t.treeNodes.read(node.right)
+	if !ok {
+		panic("")
+	}
+
+	var i uint64
+	for i = 0; true; i++ {
+		if startLocation+i >= rightNode.max() {
+			break
+		}
+	}
+
+	inRightChild := adds[:i]
+	inParent := adds[i:]
+
+	// // newLeft := node.left
+	// // newRight := node.right
+	// if node.left == node.right {
+	// 	if len(locations) != 1 {
+	// 		panic("Not 1 element at leaf")
+	// 	}
+	// 	if locations[0] != node.midpoint {
+	// 		panic("Wrong leaf found in remove subtree")
+	// 	}
+	// 	delete(t.leafLocations, node.left)
+	// 	return empty, true, nil
+	// }
+
+	// // Remove all locations from the left side of the tree
+	// newLeft, leftDeleted, err := t.removeFromSubtree(leftLocations, node.left)
+
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// Add what must be added in the right child
+	newRight, err := t.recursiveAddRight(node.right, startLocation, inRightChild)
+
+	if err != nil {
+		panic(err)
+	}
+
+	// If there are no additional adds, we replace the right child with the new right child
+	if len(inParent) == 0 {
+		newNode := patriciaNode{node.left, newRight, node.midpoint}
+		t.treeNodes.write(newNode.hash(), newNode)
+		return newNode.hash(), nil
+
+	} else {
+		// If there are elements not in the right child but in the parent,
+		// they must go in a new subtree which joins with the right child to become the new right child
+		// Form the rest into their own subtree
+
+		// TODO
+
+	}
+
+	// TODO
+
+	// If the
+
+	if !leftDeleted && !rightDeleted {
+		// Recompute the new tree node for the parent of both sides
+		newNode := patriciaNode{newLeft, newRight, node.midpoint}
+		newHash := newNode.hash()
+
+		t.treeNodes.write(newHash, newNode)
+
+		return newHash, false, nil
+	}
+	if leftDeleted && !rightDeleted {
+		return newRight, false, nil
+	}
+	if !leftDeleted && rightDeleted {
+		return newLeft, false, nil
+	}
+	if leftDeleted && rightDeleted {
+		return empty, true, nil
+	}
+
+	return empty, true, nil
+
+}
 
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) addv2(adds []Leaf) error {
