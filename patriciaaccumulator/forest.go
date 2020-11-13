@@ -95,6 +95,8 @@ type Forest struct {
 
 // TODO: It seems capitalized structs are exported. Should this be the case for the structs we define?
 
+// Typedef for midpoints to represent ranges?
+
 type patriciaLookup struct {
 	stateRoot     Hash
 	treeNodes     ForestData
