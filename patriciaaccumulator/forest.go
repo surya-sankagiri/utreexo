@@ -322,26 +322,63 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	}
 }
 
+// // RetrieveListProofs creates a list of individual proofs for targets, in sorted order
+// func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
+
+// 	// A slice of proofs of individual elements
+// 	individualProofs := make([]PatriciaProof, 0, 3000)
+
+// 	// TODO: is sorting necessary? may already be in order
+// 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+
+// 	// TODO: Parallelize
+// 	for _, target := range targets {
+// 		proof, _ := t.RetrieveProof(target)
+
+// 		rootNode, _ := t.treeNodes.read(t.stateRoot)
+
+// 		if proof.midpoints[0] != rootNode.midpoint {
+// 			panic("Wrong root midpoint")
+// 		}
+
+// 		individualProofs = append(individualProofs, proof)
+// 	}
+
+// 	return individualProofs, nil
+
+// }
+
+// Parallelized version
 // RetrieveListProofs creates a list of individual proofs for targets, in sorted order
 func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
 
 	// A slice of proofs of individual elements
 	individualProofs := make([]PatriciaProof, 0, 3000)
 
-	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+	ch := make(chan PatriciaProof)
 
-	// TODO: Parallelize
 	for _, target := range targets {
-		proof, _ := t.RetrieveProof(target)
 
-		rootNode, _ := t.treeNodes.read(t.stateRoot)
+		go func() {
+			proof, err := t.RetrieveProof(target)
+			if err != nil {
+				panic("Error retrieving proof")
+			}
+			ch <- proof
+		}()
 
-		if proof.midpoints[0] != rootNode.midpoint {
-			panic("Wrong root midpoint")
-		}
+		// rootNode, _ := t.treeNodes.read(t.stateRoot)
 
-		individualProofs = append(individualProofs, proof)
+		// if proof.midpoints[0] != rootNode.midpoint {
+		// 	panic("Wrong root midpoint")
+		// }
 	}
+
+	for range targets {
+		individualProofs = append(individualProofs, <-ch)
+	}
+
+	sort.Slice(individualProofs, func(i, j int) bool { return individualProofs[i].target < individualProofs[j].target })
 
 	return individualProofs, nil
 
