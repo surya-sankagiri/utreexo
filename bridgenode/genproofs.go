@@ -98,6 +98,8 @@ func BuildProofs(
 	defer datafile.Close()
 	start := time.Now()
 	for ; height != knownTipHeight && !stop; height++ {
+
+		fmt.Println("Beginning Proof Loop")
 		t0 := time.Now()
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
@@ -113,10 +115,12 @@ func BuildProofs(
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
+		fmt.Println("Calling genUData")
 		ud, err := genUData(delLeaves, forest, bnr.Height)
 		if err != nil {
 			return err
 		}
+		fmt.Println("UDATA generated")
 
 		// convert UData struct to bytes
 		// Commenting this out to go easy on my harddisk -Bolton
@@ -147,6 +151,7 @@ func BuildProofs(
 		// flateLength := len(flateBuf.Bytes())
 		// t4 := time.Now()
 
+		fmt.Println("Writing proof size data")
 		_, err = datafile.WriteString(
 			fmt.Sprintf("%d, %d, %d,\n", height, uncompressedLength, zlibLength)) // %d, %d, gzipLength, flateLength
 
@@ -165,6 +170,8 @@ func BuildProofs(
 		// fmt.Printf("h %d adds %d targets %d\n",
 		// 	height, len(blockAdds), len(ud.AccProof.Targets))
 
+		fmt.Println("Calling modify")
+
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
 		_, err = forest.Modify(blockAdds, ud.AccProof.Targets)
@@ -172,7 +179,7 @@ func BuildProofs(
 			return err
 		}
 
-		if bnr.Height%100 == 0 {
+		if bnr.Height%1 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
 			t := time.Now()
 			fmt.Println("Time elapsed: ", t.Sub(start))

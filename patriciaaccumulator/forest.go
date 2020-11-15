@@ -788,12 +788,15 @@ func (t *patriciaLookup) remove(location uint64) {
 // also returns whether any elements remain in that subtree
 func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash, bool, error) {
 
+	fmt.Println("Starting recursive remove")
+
 	if len(locations) == 0 {
 		return hash, false, nil
 	}
 
 	node, ok := t.treeNodes.read(hash)
 	if !ok {
+		fmt.Println(t.String())
 		panic("Remove from subtree could not find node")
 	}
 	t.treeNodes.delete(hash)
@@ -874,7 +877,7 @@ func (f *Forest) removev5(locations []uint64) error {
 		panic(fmt.Sprintf("Attempting to delete %v nodes, only %v exist", len(locations), f.numLeaves))
 	}
 	nextNumLeaves := f.numLeaves - uint64(len(locations))
-
+	fmt.Println("Calling remove from subtree")
 	newRoot, _, err := f.lookup.removeFromSubtree(locations, f.lookup.stateRoot)
 	if err != nil {
 		return err
@@ -1020,21 +1023,36 @@ var empty [32]byte
 // Returns the new hash of the root to replace the at
 func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds []Hash) (Hash, error) {
 
+	fmt.Println("Starting recursive add")
+
 	if len(adds) == 0 {
 		return hash, nil
 	}
 
+	if hash == empty {
+		if len(adds) != 1 {
+			panic("The first block has one add")
+		}
+		siblingNode := patriciaNode{adds[0], adds[0], startLocation}
+		t.treeNodes.write(siblingNode.hash(), siblingNode)
+		return siblingNode.hash(), nil
+	}
+
 	node, ok := t.treeNodes.read(hash)
 	if !ok {
-		panic("Remove from subtree could not find node")
+		panic("could not find node")
 	}
 	t.treeNodes.delete(hash)
 
 	var i uint64
-	for i = 0; true; i++ {
-		if startLocation+i >= node.max() {
-			break
-		}
+	i = node.max() - startLocation
+
+	if node.max() < startLocation {
+		panic("i less than 0")
+	}
+
+	if i > uint64(len(adds)) {
+		i = uint64(len(adds))
 	}
 
 	inNode := adds[:i]
@@ -1115,24 +1133,42 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 	// }
 
 	// return empty, true, nil
+	panic("")
 
 }
 
 // Add adds leaves to the forest.  This is the easy part.
 func (f *Forest) addv2(adds []Leaf) error {
 	start := time.Now()
+
+	if len(adds) == 0 {
+		panic("")
+	}
+
+	location := f.maxLeaf
+	addHashes := make([]Hash, 0)
 	for _, add := range adds {
 
 		// f.lookup.printAll()
+		addHashes = append(addHashes, add.Hash)
 
-		err := f.lookup.add(f.maxLeaf, add.Hash)
-		if err != nil {
-			return err
-		}
+		// err := f.lookup.add(f.maxLeaf, add.Hash)
+		// if err != nil {
+		// 	return err
+		// }
 
 		f.maxLeaf++
 		f.numLeaves++
 	}
+
+	newStateRoot, err := f.lookup.recursiveAddRight(f.lookup.stateRoot, location, addHashes)
+
+	if err != nil {
+		panic("")
+	}
+
+	f.lookup.stateRoot = newStateRoot
+
 	end := time.Now()
 	if len(adds) > 100 {
 		fmt.Println("Time to add", len(adds), "UTXOs:", end.Sub(start))
@@ -1166,10 +1202,10 @@ func (f *Forest) addv2(adds []Leaf) error {
 // Also, the deletes need there to be correct proof data, so you should first call Verify().
 func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 
-	// numDels, numAdds := len(dels), len(adds)
+	numDels, numAdds := len(dels), len(adds)
 	// delta := int64(numAdds - numDels) // watch 32/64 bit
 
-	// fmt.Printf("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
+	fmt.Printf("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
 
 	// Changing this
 	// if int64(f.numLeaves)+delta < 0 {
