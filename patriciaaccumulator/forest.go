@@ -1030,27 +1030,15 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 	}
 	t.treeNodes.delete(hash)
 
-	// check all locations in the right range
-	if !node.inRange(startLocation) || !node.inRange(startLocation+uint64(len(adds))) {
-		fmt.Println(adds, node.midpoint)
-		panic("Not in range, in removeFromSubtree")
-	}
-
-	// Determine which nodes are children of the right child
-	rightNode, ok := t.treeNodes.read(node.right)
-	if !ok {
-		panic("")
-	}
-
 	var i uint64
 	for i = 0; true; i++ {
-		if startLocation+i >= rightNode.max() {
+		if startLocation+i >= node.max() {
 			break
 		}
 	}
 
-	inRightChild := adds[:i]
-	inParent := adds[i:]
+	inNode := adds[:i]
+	outsideNode := adds[i:]
 
 	// // newLeft := node.left
 	// // newRight := node.right
@@ -1073,51 +1061,60 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 	// }
 
 	// Add what must be added in the right child
-	newRight, err := t.recursiveAddRight(node.right, startLocation, inRightChild)
+	newRightHash, err := t.recursiveAddRight(node.right, startLocation, inNode)
 
 	if err != nil {
 		panic(err)
 	}
 
+	newNode := patriciaNode{node.left, newRightHash, node.midpoint}
+	t.treeNodes.write(newNode.hash(), newNode)
+
 	// If there are no additional adds, we replace the right child with the new right child
-	if len(inParent) == 0 {
-		newNode := patriciaNode{node.left, newRight, node.midpoint}
-		t.treeNodes.write(newNode.hash(), newNode)
+	if len(outsideNode) == 0 {
+
 		return newNode.hash(), nil
 
-	} else {
-		// If there are elements not in the right child but in the parent,
-		// they must go in a new subtree which joins with the right child to become the new right child
+	} else if len(outsideNode) >= 1 {
+		// If there are elements not in the node,
+		// they must go in a new subtree which joins with the old node to make a new node
 		// Form the rest into their own subtree
 
-		// TODO
+		siblingNode := patriciaNode{outsideNode[0], outsideNode[0], startLocation + i}
+		t.treeNodes.write(siblingNode.hash(), siblingNode)
+		combinedNode := newPatriciaNode(newNode, siblingNode)
+		t.treeNodes.write(combinedNode.hash(), combinedNode)
+
+		newNewNodeHash, err := t.recursiveAddRight(combinedNode.hash(), startLocation+i+1, outsideNode[1:])
+
+		return newNewNodeHash, err
 
 	}
 
-	// TODO
+	// // TODO
 
-	// If the
+	// // If the
 
-	if !leftDeleted && !rightDeleted {
-		// Recompute the new tree node for the parent of both sides
-		newNode := patriciaNode{newLeft, newRight, node.midpoint}
-		newHash := newNode.hash()
+	// if !leftDeleted && !rightDeleted {
+	// 	// Recompute the new tree node for the parent of both sides
+	// 	newNode := patriciaNode{newLeft, newRight, node.midpoint}
+	// 	newHash := newNode.hash()
 
-		t.treeNodes.write(newHash, newNode)
+	// 	t.treeNodes.write(newHash, newNode)
 
-		return newHash, false, nil
-	}
-	if leftDeleted && !rightDeleted {
-		return newRight, false, nil
-	}
-	if !leftDeleted && rightDeleted {
-		return newLeft, false, nil
-	}
-	if leftDeleted && rightDeleted {
-		return empty, true, nil
-	}
+	// 	return newHash, false, nil
+	// }
+	// if leftDeleted && !rightDeleted {
+	// 	return newRight, false, nil
+	// }
+	// if !leftDeleted && rightDeleted {
+	// 	return newLeft, false, nil
+	// }
+	// if leftDeleted && rightDeleted {
+	// 	return empty, true, nil
+	// }
 
-	return empty, true, nil
+	// return empty, true, nil
 
 }
 
