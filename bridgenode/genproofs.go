@@ -415,6 +415,7 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
 	// blk*.dat files which have already been vetted by Bitcoin Core
+	fmt.Println("Calling ProveBatch")
 	ud.AccProof, err = f.ProveBatch(delHashes)
 	if err != nil {
 		err = fmt.Errorf("genUData failed at block %d %s %s",

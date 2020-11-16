@@ -280,6 +280,7 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	}
 	// Discover the path to the leaf
 	for {
+		fmt.Println(node.midpoint, target)
 		proof.midpoints = append(proof.midpoints, node.midpoint)
 		if !node.inRange(target) {
 			// The target location is not in range; this is an error
@@ -299,7 +300,11 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 				panic("midpoint of leaf not equal to target")
 			}
 			// proof = ConstructProof(target, midpoints, neighborHashes)
+			fmt.Println("Returning valid proof")
 			return proof, nil
+		}
+		if !node.inRange(target) {
+			panic("Target not in range in RetrieveProof")
 		}
 		if node.inLeft(target) {
 			nodeHash = node.left
@@ -322,67 +327,73 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	}
 }
 
-// // RetrieveListProofs creates a list of individual proofs for targets, in sorted order
-// func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
-
-// 	// A slice of proofs of individual elements
-// 	individualProofs := make([]PatriciaProof, 0, 3000)
-
-// 	// TODO: is sorting necessary? may already be in order
-// 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-
-// 	// TODO: Parallelize
-// 	for _, target := range targets {
-// 		proof, _ := t.RetrieveProof(target)
-
-// 		rootNode, _ := t.treeNodes.read(t.stateRoot)
-
-// 		if proof.midpoints[0] != rootNode.midpoint {
-// 			panic("Wrong root midpoint")
-// 		}
-
-// 		individualProofs = append(individualProofs, proof)
-// 	}
-
-// 	return individualProofs, nil
-
-// }
-
-// Parallelized version
 // RetrieveListProofs creates a list of individual proofs for targets, in sorted order
 func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
 
 	// A slice of proofs of individual elements
 	individualProofs := make([]PatriciaProof, 0, 3000)
 
-	ch := make(chan PatriciaProof)
-
+	// TODO: is sorting necessary? may already be in order
+	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+	fmt.Println("starting loop in RetrieveListProofs")
+	// TODO: Parallelize
 	for _, target := range targets {
+		fmt.Println("calling RetrieveProof")
+		proof, err := t.RetrieveProof(target)
+		if err != nil {
+			panic(err)
+		}
+		rootNode, ok := t.treeNodes.read(t.stateRoot)
+		if !ok {
+			panic("Could not find Root Node")
+		}
 
-		go func() {
-			proof, err := t.RetrieveProof(target)
-			if err != nil {
-				panic("Error retrieving proof")
-			}
-			ch <- proof
-		}()
+		if proof.midpoints[0] != rootNode.midpoint {
+			panic("Wrong root midpoint")
+		}
 
-		// rootNode, _ := t.treeNodes.read(t.stateRoot)
-
-		// if proof.midpoints[0] != rootNode.midpoint {
-		// 	panic("Wrong root midpoint")
-		// }
+		individualProofs = append(individualProofs, proof)
 	}
-
-	for range targets {
-		individualProofs = append(individualProofs, <-ch)
-	}
-
-	sort.Slice(individualProofs, func(i, j int) bool { return individualProofs[i].target < individualProofs[j].target })
 
 	return individualProofs, nil
 
 }
+
+// Parallelized version
+// RetrieveListProofs creates a list of individual proofs for targets, in sorted order
+// func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
+
+// A slice of proofs of individual elements
+// individualProofs := make([]PatriciaProof, 0, 3000)
+
+// ch := make(chan PatriciaProof)
+
+// for _, target := range targets {
+
+// 	go func() {
+// 		proof, err := t.RetrieveProof(target)
+// 		if err != nil {
+// 			panic("Error retrieving proof")
+// 		}
+// 		ch <- proof
+// 	}()
+
+// 	// rootNode, _ := t.treeNodes.read(t.stateRoot)
+
+// 	// if proof.midpoints[0] != rootNode.midpoint {
+// 	// 	panic("Wrong root midpoint")
+// 	// }
+// }
+
+// for range targets {
+// 	individualProofs = append(individualProofs, <-ch)
+// }
+
+// sort.Slice(individualProofs, func(i, j int) bool { return individualProofs[i].target < individualProofs[j].target })
+
+// return individualProofs, nil
+
+// }
 
 // RetrieveBatchProof creates a proof for a batch of targets against a state root
 // The proof consists of:
@@ -390,73 +401,73 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 // 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
 //   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
 // NOTE: This version is meant to trim the data that's not needed,
-func (t *patriciaLookup) RetrieveBatchProofLong(targets []uint64) LongBatchProof {
+// func (t *patriciaLookup) RetrieveBatchProofLong(targets []uint64) LongBatchProof {
 
-	// If no targets, return empty batchproof
-	if len(targets) == 0 {
-		return LongBatchProof{targets, make([]Hash, 0, 0), make([]uint64, 0, 0)}
-	}
+// 	// If no targets, return empty batchproof
+// 	if len(targets) == 0 {
+// 		return LongBatchProof{targets, make([]Hash, 0, 0), make([]uint64, 0, 0)}
+// 	}
 
-	// A slice of proofs of individual elements
-	individualProofs, _ := t.RetrieveListProofs(targets)
+// 	// A slice of proofs of individual elements
+// 	individualProofs, _ := t.RetrieveListProofs(targets)
 
-	var midpoints = make([]uint64, 0, 0)
-	var midpointsSet = make(map[uint64]bool)
-	// Collect all midpoints in a set
-	for _, proof := range individualProofs {
-		for _, midpoint := range proof.midpoints {
-			midpointsSet[midpoint] = true
-		}
-	}
-	// Put set into list form
-	for k := range midpointsSet {
-		midpoints = append(midpoints, k)
-	}
+// 	var midpoints = make([]uint64, 0, 0)
+// 	var midpointsSet = make(map[uint64]bool)
+// 	// Collect all midpoints in a set
+// 	for _, proof := range individualProofs {
+// 		for _, midpoint := range proof.midpoints {
+// 			midpointsSet[midpoint] = true
+// 		}
+// 	}
+// 	// Put set into list form
+// 	for k := range midpointsSet {
+// 		midpoints = append(midpoints, k)
+// 	}
 
-	sort.Slice(midpoints, func(i, j int) bool { return midpoints[i] < midpoints[j] })
-	// TODO compress this list
+// 	sort.Slice(midpoints, func(i, j int) bool { return midpoints[i] < midpoints[j] })
+// 	// TODO compress this list
 
-	hashesToDelete := make(map[Hash]bool)
+// 	hashesToDelete := make(map[Hash]bool)
 
-	allHashes := make([]Hash, len(individualProofs[0].hashes))
-	copy(allHashes, individualProofs[0].hashes)
+// 	allHashes := make([]Hash, len(individualProofs[0].hashes))
+// 	copy(allHashes, individualProofs[0].hashes)
 
-	// To compress this data into a BatchProof we must remove
-	// the hash children of nodes which occur in two individual proofs but fork
-	for i := 1; i < len(individualProofs); i++ {
-		proofCurrent := individualProofs[i]
-		proofPrev := individualProofs[i-1]
-		// fmt.Println(proofCurrent)
-		// fmt.Println(proofPrev)
-		// Iterate through i and i-1 to find the fork
-		for j, midpoint := range proofCurrent.midpoints {
-			if midpoint != proofPrev.midpoints[j] {
-				// Fork found
-				// Delete the hashes at j-1 from both
-				// filterDelete(hashes, proofCurrent.hashes[j-1])
-				hashesToDelete[proofPrev.hashes[j-1]] = true
-				// Now add the hashes from currentProof from after the fork
-				allHashes = append(allHashes, proofCurrent.hashes[j:]...)
-				break
+// 	// To compress this data into a BatchProof we must remove
+// 	// the hash children of nodes which occur in two individual proofs but fork
+// 	for i := 1; i < len(individualProofs); i++ {
+// 		proofCurrent := individualProofs[i]
+// 		proofPrev := individualProofs[i-1]
+// 		// fmt.Println(proofCurrent)
+// 		// fmt.Println(proofPrev)
+// 		// Iterate through i and i-1 to find the fork
+// 		for j, midpoint := range proofCurrent.midpoints {
+// 			if midpoint != proofPrev.midpoints[j] {
+// 				// Fork found
+// 				// Delete the hashes at j-1 from both
+// 				// filterDelete(hashes, proofCurrent.hashes[j-1])
+// 				hashesToDelete[proofPrev.hashes[j-1]] = true
+// 				// Now add the hashes from currentProof from after the fork
+// 				allHashes = append(allHashes, proofCurrent.hashes[j:]...)
+// 				break
 
-			}
-		}
-	}
+// 			}
+// 		}
+// 	}
 
-	// Delete deletable hashes
-	hashes := make([]Hash, 0, 0)
-	for _, hash := range allHashes {
-		if !hashesToDelete[hash] {
-			hashes = append(hashes, hash)
-		}
-	}
+// 	// Delete deletable hashes
+// 	hashes := make([]Hash, 0, 0)
+// 	for _, hash := range allHashes {
+// 		if !hashesToDelete[hash] {
+// 			hashes = append(hashes, hash)
+// 		}
+// 	}
 
-	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-	return LongBatchProof{targets, hashes, midpoints}
+// 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+// 	return LongBatchProof{targets, hashes, midpoints}
 
-	// TODO
+// 	// TODO
 
-}
+// }
 
 // RetrieveBatchProofShort creates a proof for a batch of targets against a state root
 // The proof consists of:
@@ -473,6 +484,7 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 
 	// A slice of proofs of individual elements
 	// RetrieveListProofs creates a list of individual proofs for targets, **in sorted order**
+	fmt.Println("calling RetrieveListProofs")
 	individualProofs, _ := t.RetrieveListProofs(targets)
 	// midpointsWidth is a slice that will go into the BatchProof; it will replace the slice of midpoints
 	// TODO: convert midpointsWidth to []uint8
@@ -545,10 +557,14 @@ func calculateWidth(midpoint uint64) uint8 {
 // ProveBatch Returns a BatchProof proving a list of hashes against a forest
 func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
 	targets := make([]uint64, len(hashes))
+	var ok bool
 	for i, hash := range hashes {
-		targets[i] = f.lookup.leafLocations[hash]
+		targets[i], ok = f.lookup.leafLocations[hash]
+		if !ok {
+			panic("ProveBatch: hash of leaf not found in leafLocations")
+		}
 	}
-
+	fmt.Println("calling RetrieveBatchProof")
 	return f.lookup.RetrieveBatchProof(targets), nil
 }
 
@@ -1034,8 +1050,10 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 			panic("The first block has one add")
 		}
 		siblingNode := patriciaNode{adds[0], adds[0], startLocation}
-		t.treeNodes.write(siblingNode.hash(), siblingNode)
-		return siblingNode.hash(), nil
+		newHash := siblingNode.hash()
+		t.treeNodes.write(newHash, siblingNode)
+		t.leafLocations[adds[0]] = startLocation
+		return newHash, nil
 	}
 
 	node, ok := t.treeNodes.read(hash)
@@ -1048,7 +1066,7 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 	i = node.max() - startLocation
 
 	if node.max() < startLocation {
-		panic("i less than 0")
+		i = 0
 	}
 
 	if i > uint64(len(adds)) {
@@ -1099,7 +1117,9 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 		// Form the rest into their own subtree
 
 		siblingNode := patriciaNode{outsideNode[0], outsideNode[0], startLocation + i}
-		t.treeNodes.write(siblingNode.hash(), siblingNode)
+		siblingNodeHash := siblingNode.hash()
+		t.treeNodes.write(siblingNodeHash, siblingNode)
+		t.leafLocations[outsideNode[0]] = startLocation + i
 		combinedNode := newPatriciaNode(newNode, siblingNode)
 		t.treeNodes.write(combinedNode.hash(), combinedNode)
 
