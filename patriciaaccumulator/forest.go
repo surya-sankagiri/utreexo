@@ -8,6 +8,8 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	logrus "github.com/sirupsen/logrus"
 )
 
 // A FullForest is the entire accumulator of the UTXO set. This is
@@ -108,6 +110,11 @@ type patriciaNode struct {
 	right    Hash
 	midpoint uint64 // The midpoint of the binary interval represented by the common
 }
+
+// Just for fun, making a type
+
+// // BinaryInterval represents
+// type BinaryInterval uint64
 
 // Utility to determine of one midpoint range contains another
 func subset(a, b uint64) bool {
@@ -280,7 +287,7 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	}
 	// Discover the path to the leaf
 	for {
-		fmt.Println(node.midpoint, target)
+		logrus.Debug(fmt.Sprintln(node.midpoint, target))
 		proof.midpoints = append(proof.midpoints, node.midpoint)
 		if !node.inRange(target) {
 			// The target location is not in range; this is an error
@@ -300,7 +307,7 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 				panic("midpoint of leaf not equal to target")
 			}
 			// proof = ConstructProof(target, midpoints, neighborHashes)
-			fmt.Println("Returning valid proof")
+			logrus.Trace("Returning valid proof")
 			return proof, nil
 		}
 		if !node.inRange(target) {
@@ -327,73 +334,74 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	}
 }
 
+// // RetrieveListProofs creates a list of individual proofs for targets, in sorted order
+// func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
+
+// 	// A slice of proofs of individual elements
+// 	individualProofs := make([]PatriciaProof, 0, 3000)
+
+// 	// TODO: is sorting necessary? may already be in order
+// 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+
+// 	logrus.Debug("Starting loop in RetrieveListProofs")
+// 	// Note: a parallelized version is below
+// 	for _, target := range targets {
+// 		logrus.Debug("calling RetrieveProof")
+// 		proof, err := t.RetrieveProof(target)
+// 		if err != nil {
+// 			panic(err)
+// 		}
+// 		rootNode, ok := t.treeNodes.read(t.stateRoot)
+// 		if !ok {
+// 			panic("Could not find Root Node")
+// 		}
+
+// 		if proof.midpoints[0] != rootNode.midpoint {
+// 			panic("Wrong root midpoint")
+// 		}
+
+// 		individualProofs = append(individualProofs, proof)
+// 	}
+
+// 	return individualProofs, nil
+
+// }
+
+// Parallelized version
 // RetrieveListProofs creates a list of individual proofs for targets, in sorted order
 func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
 
 	// A slice of proofs of individual elements
 	individualProofs := make([]PatriciaProof, 0, 3000)
 
-	// TODO: is sorting necessary? may already be in order
-	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-	fmt.Println("starting loop in RetrieveListProofs")
-	// TODO: Parallelize
+	ch := make(chan PatriciaProof)
+
 	for _, target := range targets {
-		fmt.Println("calling RetrieveProof")
-		proof, err := t.RetrieveProof(target)
-		if err != nil {
-			panic(err)
-		}
-		rootNode, ok := t.treeNodes.read(t.stateRoot)
-		if !ok {
-			panic("Could not find Root Node")
-		}
 
-		if proof.midpoints[0] != rootNode.midpoint {
-			panic("Wrong root midpoint")
-		}
+		go func() {
+			proof, err := t.RetrieveProof(target)
+			if err != nil {
+				panic("Error retrieving proof")
+			}
+			ch <- proof
+		}()
 
-		individualProofs = append(individualProofs, proof)
+		// rootNode, _ := t.treeNodes.read(t.stateRoot)
+
+		// if proof.midpoints[0] != rootNode.midpoint {
+		// 	panic("Wrong root midpoint")
+		// }
 	}
+
+	for range targets {
+		individualProofs = append(individualProofs, <-ch)
+	}
+
+	sort.Slice(individualProofs, func(i, j int) bool { return individualProofs[i].target < individualProofs[j].target })
 
 	return individualProofs, nil
 
 }
-
-// Parallelized version
-// RetrieveListProofs creates a list of individual proofs for targets, in sorted order
-// func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
-
-// A slice of proofs of individual elements
-// individualProofs := make([]PatriciaProof, 0, 3000)
-
-// ch := make(chan PatriciaProof)
-
-// for _, target := range targets {
-
-// 	go func() {
-// 		proof, err := t.RetrieveProof(target)
-// 		if err != nil {
-// 			panic("Error retrieving proof")
-// 		}
-// 		ch <- proof
-// 	}()
-
-// 	// rootNode, _ := t.treeNodes.read(t.stateRoot)
-
-// 	// if proof.midpoints[0] != rootNode.midpoint {
-// 	// 	panic("Wrong root midpoint")
-// 	// }
-// }
-
-// for range targets {
-// 	individualProofs = append(individualProofs, <-ch)
-// }
-
-// sort.Slice(individualProofs, func(i, j int) bool { return individualProofs[i].target < individualProofs[j].target })
-
-// return individualProofs, nil
-
-// }
 
 // RetrieveBatchProof creates a proof for a batch of targets against a state root
 // The proof consists of:
@@ -484,7 +492,7 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 
 	// A slice of proofs of individual elements
 	// RetrieveListProofs creates a list of individual proofs for targets, **in sorted order**
-	fmt.Println("calling RetrieveListProofs")
+	logrus.Debug("Calling RetrieveListProofs")
 	individualProofs, _ := t.RetrieveListProofs(targets)
 	// midpointsWidth is a slice that will go into the BatchProof; it will replace the slice of midpoints
 	// TODO: convert midpointsWidth to []uint8
@@ -564,7 +572,7 @@ func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
 			panic("ProveBatch: hash of leaf not found in leafLocations")
 		}
 	}
-	fmt.Println("calling RetrieveBatchProof")
+	logrus.Debug("Calling RetrieveBatchProof")
 	return f.lookup.RetrieveBatchProof(targets), nil
 }
 
@@ -613,7 +621,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	t.treeNodes.write(newLeafNode.hash(), newLeafNode)
 	t.leafLocations[toAdd] = location
 
-	// fmt.Println("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting")
+	logrus.Debug("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], t.treeNodes.size(), "nodes preexisting")
 
 	if t.stateRoot == empty {
 		// If the patriciaLookup is empty (has empty root), treeNodes should be empty
@@ -628,7 +636,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	}
 	node, ok := t.treeNodes.read(t.stateRoot)
-	// fmt.Println("starting root midpoint is", node.midpoint)
+	logrus.Debug("starting root midpoint is", node.midpoint)
 	if !ok {
 		return fmt.Errorf("state root %x not found", t.stateRoot)
 	}
@@ -764,7 +772,7 @@ func (t *patriciaLookup) remove(location uint64) {
 	// The root becomes empty
 	if len(neighborBranch) == 0 {
 		t.stateRoot = empty
-		// fmt.Println("new root hash is", empty[:6])
+		logrus.Debug("new root hash is", empty[:6])
 
 		return
 	}
@@ -773,7 +781,7 @@ func (t *patriciaLookup) remove(location uint64) {
 	// The neighbor becomes the new root.
 	if len(neighborBranch) == 1 {
 		t.stateRoot = neighborBranch[0].hash()
-		// fmt.Println("new root hash is", t.stateRoot[:6])
+		logrus.Debug("new root hash is", t.stateRoot[:6])
 
 		return
 	}
@@ -795,7 +803,7 @@ func (t *patriciaLookup) remove(location uint64) {
 
 	// The new state root is the hash of the last node added
 	t.stateRoot = nodeToAdd.hash()
-	// fmt.Println("new root hash is", t.stateRoot[:6])
+	logrus.Debug("new root hash is", t.stateRoot[:6])
 
 }
 
@@ -804,7 +812,7 @@ func (t *patriciaLookup) remove(location uint64) {
 // also returns whether any elements remain in that subtree
 func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash, bool, error) {
 
-	fmt.Println("Starting recursive remove")
+	logrus.Debug("Starting recursive remove")
 
 	if len(locations) == 0 {
 		return hash, false, nil
@@ -812,16 +820,16 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 
 	node, ok := t.treeNodes.read(hash)
 	if !ok {
-		fmt.Println(t.String())
+		logrus.Debug(t.String())
 		panic("Remove from subtree could not find node")
 	}
 	t.treeNodes.delete(hash)
 
-	// fmt.Println("Removing", locations, node.midpoint, node.left, node.right)
+	// logrus.Debug("Removing", locations, node.midpoint, node.left, node.right)
 
 	// check all locations in the right range
 	if !node.inRange(locations[0]) || !node.inRange(locations[len(locations)-1]) {
-		fmt.Println(locations, node.midpoint)
+		logrus.Debug(locations, node.midpoint)
 		panic("Not in range, in removeFromSubtree")
 	}
 
@@ -893,7 +901,7 @@ func (f *Forest) removev5(locations []uint64) error {
 		panic(fmt.Sprintf("Attempting to delete %v nodes, only %v exist", len(locations), f.numLeaves))
 	}
 	nextNumLeaves := f.numLeaves - uint64(len(locations))
-	fmt.Println("Calling remove from subtree")
+	logrus.Debug("Calling remove from subtree")
 	newRoot, _, err := f.lookup.removeFromSubtree(locations, f.lookup.stateRoot)
 	if err != nil {
 		return err
@@ -1039,7 +1047,7 @@ var empty [32]byte
 // Returns the new hash of the root to replace the at
 func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds []Hash) (Hash, error) {
 
-	fmt.Println("Starting recursive add")
+	logrus.Debug("Starting recursive add")
 
 	if len(adds) == 0 {
 		return hash, nil
@@ -1225,7 +1233,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	numDels, numAdds := len(dels), len(adds)
 	// delta := int64(numAdds - numDels) // watch 32/64 bit
 
-	fmt.Printf("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
+	logrus.Debug("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
 
 	// Changing this
 	// if int64(f.numLeaves)+delta < 0 {

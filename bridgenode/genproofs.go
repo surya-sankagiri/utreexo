@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/sirupsen/logrus"
 	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 
 	"github.com/surya-sankagiri/utreexo/util"
@@ -23,6 +24,7 @@ import (
 
 // build the bridge node / proofs
 func BuildProofs(
+
 	param chaincfg.Params, dataDir string,
 	forestInRam, forestCached bool, sig chan bool) error {
 
@@ -99,7 +101,7 @@ func BuildProofs(
 	start := time.Now()
 	for ; height != knownTipHeight && !stop; height++ {
 
-		fmt.Println("Beginning Proof Loop")
+		logrus.Debug("Beginning Proof Loop")
 		t0 := time.Now()
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
@@ -115,12 +117,12 @@ func BuildProofs(
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
-		fmt.Println("Calling genUData")
+		logrus.Trace("Calling genUData")
 		ud, err := genUData(delLeaves, forest, bnr.Height)
 		if err != nil {
 			return err
 		}
-		fmt.Println("UDATA generated")
+		logrus.Debug("UDATA generated")
 
 		// convert UData struct to bytes
 		// Commenting this out to go easy on my harddisk -Bolton
@@ -151,7 +153,7 @@ func BuildProofs(
 		// flateLength := len(flateBuf.Bytes())
 		// t4 := time.Now()
 
-		fmt.Println("Writing proof size data")
+		logrus.Debug("Writing proof size data")
 		_, err = datafile.WriteString(
 			fmt.Sprintf("%d, %d, %d,\n", height, uncompressedLength, zlibLength)) // %d, %d, gzipLength, flateLength
 
@@ -170,7 +172,7 @@ func BuildProofs(
 		// fmt.Printf("h %d adds %d targets %d\n",
 		// 	height, len(blockAdds), len(ud.AccProof.Targets))
 
-		fmt.Println("Calling modify")
+		logrus.Trace("Calling modify")
 
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
@@ -179,7 +181,7 @@ func BuildProofs(
 			return err
 		}
 
-		if bnr.Height%1 == 0 {
+		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
 			t := time.Now()
 			fmt.Println("Time elapsed: ", t.Sub(start))
@@ -415,7 +417,7 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
 	// blk*.dat files which have already been vetted by Bitcoin Core
-	fmt.Println("Calling ProveBatch")
+	logrus.Trace("Calling ProveBatch")
 	ud.AccProof, err = f.ProveBatch(delHashes)
 	if err != nil {
 		err = fmt.Errorf("genUData failed at block %d %s %s",
