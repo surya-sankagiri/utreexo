@@ -22,9 +22,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-// build the bridge node / proofs
+// BuildProofs builds the bridge node / proofs
 func BuildProofs(
-
 	param chaincfg.Params, dataDir string,
 	forestInRam, forestCached bool, sig chan bool) error {
 
@@ -99,6 +98,7 @@ func BuildProofs(
 	datafile.WriteString("Block Number, Uncompressed, zlib, gzip, flate")
 	defer datafile.Close()
 	start := time.Now()
+	logrus.SetLevel(logrus.TraceLevel)
 	for ; height != knownTipHeight && !stop; height++ {
 
 		logrus.Debug("Beginning Proof Loop")
