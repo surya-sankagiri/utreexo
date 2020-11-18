@@ -68,14 +68,14 @@ func (d *ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 	if inRAM {
 		// Already in ram, we are done
 		// d.ram[hash] = node
-		logrus.Warn("Trying to write something that already exists")
+		logrus.Trace("Trying to write something that already exists")
 		return
 	}
 
 	_, ok := d.disk.read(hash)
 	if ok {
 		// Already in disk, done
-		logrus.Warn("Trying to write something that already exists")
+		logrus.Trace("Trying to write something that already exists")
 		return
 	}
 
