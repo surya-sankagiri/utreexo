@@ -98,7 +98,8 @@ func BuildProofs(
 	datafile.WriteString("Block Number, Uncompressed, zlib, gzip, flate")
 	defer datafile.Close()
 	start := time.Now()
-	logrus.SetLevel(logrus.TraceLevel)
+	// Set logging level
+	logrus.SetLevel(logrus.InfoLevel)
 	for ; height != knownTipHeight && !stop; height++ {
 
 		logrus.Debug("Beginning Proof Loop")
