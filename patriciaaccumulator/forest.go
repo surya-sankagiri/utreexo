@@ -918,9 +918,7 @@ func (f *Forest) removev5(locations []uint64) error {
 	// 	f.lookup.remove(location)
 	// }
 	end := time.Now()
-	if len(locations) > 100 {
-		fmt.Println("Time to delete", len(locations), "UTXOs:", end.Sub(start))
-	}
+	logrus.Debug("Time to delete", len(locations), "UTXOs:", end.Sub(start))
 	f.numLeaves = nextNumLeaves
 
 	return nil
@@ -949,9 +947,9 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		} else {
 			// for on-disk with cache
 			// Max 10000 elems in ram to start
-			// treeNodes := newRAMCacheTreeNodes(forestFile, 100)
+			treeNodes := newRAMCacheTreeNodes(forestFile, 10000000)
 			// for on disk
-			treeNodes := newDiskTreeNodes(forestFile)
+			// treeNodes := newDiskTreeNodes(forestFile)
 			// for bitcask/diskv
 			// treeNodes := newdbTreeNodes()
 
@@ -1045,30 +1043,91 @@ var empty [32]byte
 
 // Adds hashes to the tree under node hash with starting location
 // Returns the new hash of the root to replace the at
-func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds []Hash) (Hash, error) {
+// func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds []Hash) (Hash, error) {
+
+// 	logrus.Debug("Starting recursive add")
+
+// 	if len(adds) == 0 {
+// 		return hash, nil
+// 	}
+
+// 	if hash == empty {
+// 		if len(adds) != 1 {
+// 			panic("The first block has one add")
+// 		}
+// 		siblingNode := patriciaNode{adds[0], adds[0], startLocation}
+// 		newHash := siblingNode.hash()
+// 		t.treeNodes.write(newHash, siblingNode)
+// 		t.leafLocations[adds[0]] = startLocation
+// 		return newHash, nil
+// 	}
+
+// 	node, ok := t.treeNodes.read(hash)
+// 	if !ok {
+// 		panic("could not find node")
+// 	}
+// 	t.treeNodes.delete(hash)
+
+// 	var i uint64
+// 	i = node.max() - startLocation
+
+// 	if node.max() < startLocation {
+// 		i = 0
+// 	}
+
+// 	if i > uint64(len(adds)) {
+// 		i = uint64(len(adds))
+// 	}
+
+// 	inNode := adds[:i]
+// 	outsideNode := adds[i:]
+
+// 	// Add what must be added in the right child
+// 	newRightHash, err := t.recursiveAddRight(node.right, startLocation, inNode)
+
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	newNode := patriciaNode{node.left, newRightHash, node.midpoint}
+// 	t.treeNodes.write(newNode.hash(), newNode)
+
+// 	// If there are no additional adds, we replace the right child with the new right child
+// 	if len(outsideNode) == 0 {
+
+// 		return newNode.hash(), nil
+
+// 	} else if len(outsideNode) >= 1 {
+// 		// If there are elements not in the node,
+// 		// they must go in a new subtree which joins with the old node to make a new node
+// 		// Form the rest into their own subtree
+
+// 		siblingNode := patriciaNode{outsideNode[0], outsideNode[0], startLocation + i}
+// 		siblingNodeHash := siblingNode.hash()
+// 		t.treeNodes.write(siblingNodeHash, siblingNode)
+// 		t.leafLocations[outsideNode[0]] = startLocation + i
+// 		combinedNode := newPatriciaNode(newNode, siblingNode)
+// 		t.treeNodes.write(combinedNode.hash(), combinedNode)
+
+// 		newNewNodeHash, err := t.recursiveAddRight(combinedNode.hash(), startLocation+i+1, outsideNode[1:])
+
+// 		return newNewNodeHash, err
+
+// 	}
+
+// 	panic("")
+
+// }
+
+// Adds hashes to the tree under node hash with starting location
+// Returns the new hash of the root to replace the at
+func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint64, adds []Hash) (Hash, error) {
 
 	logrus.Debug("Starting recursive add")
 
 	if len(adds) == 0 {
-		return hash, nil
+		panic("recursiveAddRight: Do not call if nothing to add")
 	}
-
-	if hash == empty {
-		if len(adds) != 1 {
-			panic("The first block has one add")
-		}
-		siblingNode := patriciaNode{adds[0], adds[0], startLocation}
-		newHash := siblingNode.hash()
-		t.treeNodes.write(newHash, siblingNode)
-		t.leafLocations[adds[0]] = startLocation
-		return newHash, nil
-	}
-
-	node, ok := t.treeNodes.read(hash)
-	if !ok {
-		panic("could not find node")
-	}
-	t.treeNodes.delete(hash)
 
 	var i uint64
 	i = node.max() - startLocation
@@ -1083,42 +1142,29 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 
 	inNode := adds[:i]
 	outsideNode := adds[i:]
-
-	// // newLeft := node.left
-	// // newRight := node.right
-	// if node.left == node.right {
-	// 	if len(locations) != 1 {
-	// 		panic("Not 1 element at leaf")
-	// 	}
-	// 	if locations[0] != node.midpoint {
-	// 		panic("Wrong leaf found in remove subtree")
-	// 	}
-	// 	delete(t.leafLocations, node.left)
-	// 	return empty, true, nil
-	// }
-
-	// // Remove all locations from the left side of the tree
-	// newLeft, leftDeleted, err := t.removeFromSubtree(leftLocations, node.left)
-
-	// if err != nil {
-	// 	panic(err)
-	// }
-
+	var newNode patriciaNode
 	// Add what must be added in the right child
-	newRightHash, err := t.recursiveAddRight(node.right, startLocation, inNode)
+	if i > 0 {
+		rightNode, ok := t.treeNodes.read(node.right)
+		if !ok {
+			panic("could not find node")
+		}
+		t.treeNodes.delete(node.right)
+		newRightHash, err := t.recursiveAddRight(rightNode, startLocation, inNode)
 
-	if err != nil {
-		panic(err)
+		if err != nil {
+			panic(err)
+		}
+		newNode = patriciaNode{node.left, newRightHash, node.midpoint}
+	} else {
+		newNode = node
 	}
-
-	newNode := patriciaNode{node.left, newRightHash, node.midpoint}
-	t.treeNodes.write(newNode.hash(), newNode)
+	newNodeHash := newNode.hash()
+	t.treeNodes.write(newNodeHash, newNode)
 
 	// If there are no additional adds, we replace the right child with the new right child
 	if len(outsideNode) == 0 {
-
-		return newNode.hash(), nil
-
+		return newNodeHash, nil
 	} else if len(outsideNode) >= 1 {
 		// If there are elements not in the node,
 		// they must go in a new subtree which joins with the old node to make a new node
@@ -1129,40 +1175,17 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 		t.treeNodes.write(siblingNodeHash, siblingNode)
 		t.leafLocations[outsideNode[0]] = startLocation + i
 		combinedNode := newPatriciaNode(newNode, siblingNode)
-		t.treeNodes.write(combinedNode.hash(), combinedNode)
-
-		newNewNodeHash, err := t.recursiveAddRight(combinedNode.hash(), startLocation+i+1, outsideNode[1:])
-
-		return newNewNodeHash, err
-
+		combinedNodeHash := combinedNode.hash()
+		t.treeNodes.write(combinedNodeHash, combinedNode)
+		if len(outsideNode) > 1 {
+			newNewNodeHash, err := t.recursiveAddRight(combinedNode, startLocation+i+1, outsideNode[1:])
+			return newNewNodeHash, err
+		} else {
+			t.treeNodes.write(combinedNodeHash, combinedNode)
+			return combinedNodeHash, nil
+		}
 	}
-
-	// // TODO
-
-	// // If the
-
-	// if !leftDeleted && !rightDeleted {
-	// 	// Recompute the new tree node for the parent of both sides
-	// 	newNode := patriciaNode{newLeft, newRight, node.midpoint}
-	// 	newHash := newNode.hash()
-
-	// 	t.treeNodes.write(newHash, newNode)
-
-	// 	return newHash, false, nil
-	// }
-	// if leftDeleted && !rightDeleted {
-	// 	return newRight, false, nil
-	// }
-	// if !leftDeleted && rightDeleted {
-	// 	return newLeft, false, nil
-	// }
-	// if leftDeleted && rightDeleted {
-	// 	return empty, true, nil
-	// }
-
-	// return empty, true, nil
 	panic("")
-
 }
 
 // Add adds leaves to the forest.  This is the easy part.
@@ -1188,20 +1211,30 @@ func (f *Forest) addv2(adds []Leaf) error {
 		f.maxLeaf++
 		f.numLeaves++
 	}
-
-	newStateRoot, err := f.lookup.recursiveAddRight(f.lookup.stateRoot, location, addHashes)
-
-	if err != nil {
-		panic("")
+	if f.lookup.stateRoot == empty {
+		if len(adds) != 1 {
+			panic("The first block has one add")
+		}
+		rootNode := patriciaNode{addHashes[0], addHashes[0], 0}
+		newHash := rootNode.hash()
+		f.lookup.treeNodes.write(newHash, rootNode)
+		f.lookup.leafLocations[addHashes[0]] = 0
+		f.lookup.stateRoot = newHash
+	} else {
+		rootNode, ok := f.lookup.treeNodes.read(f.lookup.stateRoot)
+		if !ok {
+			panic("could not find state root")
+		}
+		f.lookup.treeNodes.delete(f.lookup.stateRoot)
+		newStateRoot, err := f.lookup.recursiveAddRight(rootNode, location, addHashes)
+		if err != nil {
+			panic("")
+		}
+		f.lookup.stateRoot = newStateRoot
 	}
-
-	f.lookup.stateRoot = newStateRoot
 
 	end := time.Now()
-	if len(adds) > 100 {
-		fmt.Println("Time to add", len(adds), "UTXOs:", end.Sub(start))
-	}
-
+	logrus.Debug("Time to add", len(adds), "UTXOs:", end.Sub(start))
 	return nil
 	// for _, add := range adds {
 	// 	// fmt.Printf("adding %x pos %d\n", add.Hash[:4], f.numLeaves)
@@ -1233,7 +1266,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	numDels, numAdds := len(dels), len(adds)
 	// delta := int64(numAdds - numDels) // watch 32/64 bit
 
-	logrus.Debug("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
+	logrus.Debugf("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
 
 	// Changing this
 	// if int64(f.numLeaves)+delta < 0 {
