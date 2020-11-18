@@ -8,6 +8,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	// "github.com/peterbourgon/db"
+	logrus "github.com/sirupsen/logrus"
 
 	"github.com/boltdb/bolt"
 )
@@ -46,7 +47,7 @@ func newRAMCacheTreeNodes(file *os.File, maxRAMElems int) ramCacheTreeNodes {
 }
 
 // read ignores errors. Probably get an empty hash if it doesn't work
-func (d ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
+func (d *ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
 
 	val, ok := d.ram.Get(hash)
 	if ok {
@@ -54,24 +55,27 @@ func (d ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
 		return val.(patriciaNode), ok
 	}
 	// If not in memory, read disk
+	logrus.Trace(fmt.Sprintln("If not in memory, read disk"))
 	return d.disk.read(hash)
 
 }
 
 // write writes a key-value pair
-func (d ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
+func (d *ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 
 	inRAM := d.ram.Contains(hash)
 
 	if inRAM {
 		// Already in ram, we are done
 		// d.ram[hash] = node
+		logrus.Warn("Trying to write something that already exists")
 		return
 	}
 
 	_, ok := d.disk.read(hash)
 	if ok {
 		// Already in disk, done
+		logrus.Warn("Trying to write something that already exists")
 		return
 	}
 
@@ -81,6 +85,7 @@ func (d ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 		d.ram.Add(hash, node)
 	} else {
 		// Not enough space, move something in ram to disk
+		logrus.Trace("move something in ram to disk\n")
 		oldHash, oldNode, ok := d.ram.RemoveOldest()
 		if !ok {
 			panic("Should not be empty")
@@ -92,7 +97,7 @@ func (d ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 
 }
 
-func (d ramCacheTreeNodes) delete(hash Hash) {
+func (d *ramCacheTreeNodes) delete(hash Hash) {
 
 	// Delete from ram
 	present := d.ram.Remove(hash)
@@ -217,6 +222,7 @@ func (d *diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 		fmt.Printf("\tinput hash is %x\n", hash)
 		fmt.Printf("\tread hash is %x\n", readHash)
 		fmt.Printf("\tcomputed hash is %x\n", node.hash())
+		fmt.Printf("\tnode midpoint is %d\n", node.midpoint)
 		panic("MiniHash Collision TODO do something different to secure this, this is just a kludge in place of a more sophisticated disk-backed key-value store")
 	}
 
@@ -267,10 +273,9 @@ func (d *diskTreeNodes) write(hash Hash, node patriciaNode) {
 	if node.hash() != hash {
 		panic("Input node with hash not matching the input hash")
 	}
-
 	// If there is no more room left in the file, double the size of the file
 	if fileSize == int64(d.filePopulatedTo) && len(d.emptySlots) == 0 {
-		fmt.Println("Doubling file size")
+		logrus.Trace("Doubling file size\n")
 		err := d.file.Truncate(2 * fileSize * slotSize)
 		if err != nil {
 			panic(err)
@@ -279,15 +284,17 @@ func (d *diskTreeNodes) write(hash Hash, node patriciaNode) {
 	var indexToWrite uint64
 	// If there is an emptySlot, write to it
 	if len(d.emptySlots) > 0 {
-		// fmt.Println("Found an empty slot")
+		logrus.Trace("Found an empty slot\n")
 		indexToWrite = d.emptySlots[0]
 		d.emptySlots = d.emptySlots[1:]
 	} else {
 		// Otherwise, write to a new slot
-		// fmt.Println("Wrote to new slot")
+		logrus.Trace("Wrote to new slot\n")
+		logrus.Debugf("filePopulatedTo: %d", d.filePopulatedTo)
 		indexToWrite = d.filePopulatedTo
 		d.filePopulatedTo++
 	}
+	logrus.Debugf("writing node with midpoint %d at index %d\n", node.midpoint, indexToWrite)
 
 	_, err := d.file.WriteAt(hash[:], int64(indexToWrite*slotSize))
 	_, err = d.file.WriteAt(node.left[:], int64(indexToWrite*slotSize+32))
