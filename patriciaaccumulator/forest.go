@@ -102,7 +102,7 @@ type Forest struct {
 type patriciaLookup struct {
 	stateRoot     Hash
 	treeNodes     ForestData
-	leafLocations map[Hash]uint64
+	leafLocations map[MiniHash]uint64
 }
 
 type patriciaNode struct {
@@ -567,7 +567,7 @@ func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
 	targets := make([]uint64, len(hashes))
 	var ok bool
 	for i, hash := range hashes {
-		targets[i], ok = f.lookup.leafLocations[hash]
+		targets[i], ok = f.lookup.leafLocations[hash.Mini()]
 		if !ok {
 			panic("ProveBatch: hash of leaf not found in leafLocations")
 		}
@@ -619,7 +619,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	// Add the new leaf node
 	newLeafNode := patriciaNode{toAdd, toAdd, location}
 	t.treeNodes.write(newLeafNode.hash(), newLeafNode)
-	t.leafLocations[toAdd] = location
+	t.leafLocations[toAdd.Mini()] = location
 
 	logrus.Debug("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], t.treeNodes.size(), "nodes preexisting")
 
@@ -748,7 +748,7 @@ func (t *patriciaLookup) remove(location uint64) {
 
 	// node is now the leaf node for the deleted entry
 	// delete the hash from the leaf location map
-	loc, ok := t.leafLocations[node.left]
+	loc, ok := t.leafLocations[node.left.Mini()]
 
 	if !ok {
 		panic("Didn't find location")
@@ -756,7 +756,7 @@ func (t *patriciaLookup) remove(location uint64) {
 	if loc != node.midpoint {
 		panic("Location does not match")
 	}
-	delete(t.leafLocations, node.left)
+	delete(t.leafLocations, node.left.Mini())
 
 	// Check that the leaf node we found has the right location
 	if node.midpoint != location {
@@ -854,7 +854,7 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 		if locations[0] != node.midpoint {
 			panic("Wrong leaf found in remove subtree")
 		}
-		delete(t.leafLocations, node.left)
+		delete(t.leafLocations, node.left.Mini())
 		return empty, true, nil
 	}
 
@@ -979,7 +979,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 			// 	panic("")
 			// }
 
-			f.lookup = patriciaLookup{Hash{}, &treeNodes, make(map[Hash]uint64)}
+			f.lookup = patriciaLookup{Hash{}, &treeNodes, make(map[MiniHash]uint64)}
 			// Changed this to a reference
 			// This code runs, but I don't understand why.
 			// Shouldn't treeNodes be overwritten when it goes out of scope?
@@ -1173,7 +1173,7 @@ func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint
 		siblingNode := patriciaNode{outsideNode[0], outsideNode[0], startLocation + i}
 		siblingNodeHash := siblingNode.hash()
 		t.treeNodes.write(siblingNodeHash, siblingNode)
-		t.leafLocations[outsideNode[0]] = startLocation + i
+		t.leafLocations[outsideNode[0].Mini()] = startLocation + i
 		combinedNode := newPatriciaNode(newNode, siblingNode)
 		combinedNodeHash := combinedNode.hash()
 		t.treeNodes.write(combinedNodeHash, combinedNode)
@@ -1218,7 +1218,7 @@ func (f *Forest) addv2(adds []Leaf) error {
 		rootNode := patriciaNode{addHashes[0], addHashes[0], 0}
 		newHash := rootNode.hash()
 		f.lookup.treeNodes.write(newHash, rootNode)
-		f.lookup.leafLocations[addHashes[0]] = 0
+		f.lookup.leafLocations[addHashes[0].Mini()] = 0
 		f.lookup.stateRoot = newHash
 	} else {
 		rootNode, ok := f.lookup.treeNodes.read(f.lookup.stateRoot)
