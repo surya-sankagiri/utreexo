@@ -13,7 +13,6 @@ import (
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/sirupsen/logrus"
 
 	_ "net/http/pprof"
 
@@ -55,16 +54,6 @@ var cpuProfCmd = optionCmd.String("cpuprof", "",
 	`Enable pprof cpu profiling. Usage: 'cpuprof='path/to/file'`)
 var memProfCmd = optionCmd.String("memprof", "",
 	`Enable pprof heap profiling. Usage: 'memprof='path/to/file'`)
-
-func init() {
-
-	// Output to stdout instead of the default stderr
-	// Can be any io.Writer, see below for File example
-	logrus.SetOutput(os.Stdout)
-
-	// Only logrus the warning severity or above.
-	logrus.SetLevel(logrus.DebugLevel)
-}
 
 func main() {
 

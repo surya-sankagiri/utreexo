@@ -3,9 +3,11 @@ package patriciaaccumulator
 import (
 	"encoding/binary"
 	"fmt"
+	"log"
 	"os"
 
 	lru "github.com/hashicorp/golang-lru"
+
 	// "github.com/peterbourgon/db"
 	logrus "github.com/sirupsen/logrus"
 
@@ -25,6 +27,7 @@ type ForestData interface {
 	// swapHash(a, b uint64)
 	// swapHashRange(a, b, w uint64)
 	size() uint64
+	diskSize() uint64
 	// resize(newSize uint64) // make it have a new size (bigger)
 	close()
 }
@@ -48,6 +51,8 @@ func newRAMCacheTreeNodes(file *os.File, maxRAMElems int) ramCacheTreeNodes {
 // read ignores errors. Probably get an empty hash if it doesn't work
 func (d *ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
 
+	logrus.Trace("Cache Level read ", hash[:6])
+
 	val, ok := d.ram.Get(hash)
 	if ok {
 		// In memory
@@ -62,29 +67,31 @@ func (d *ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
 // write writes a key-value pair
 func (d *ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 
-	inRAM := d.ram.Contains(hash)
+	logrus.Trace("Cache Level write ", hash[:6])
 
-	if inRAM {
-		// Already in ram, we are done
-		// d.ram[hash] = node
-		logrus.Trace("Trying to write something that already exists")
-		return
-	}
+	// inRAM := d.ram.Contains(hash)
 
-	_, ok := d.disk.read(hash)
-	if ok {
-		// Already in disk, done
-		logrus.Trace("Trying to write something that already exists")
-		return
-	}
+	// if inRAM {
+	// 	// d.ram[hash] = node
+	// 	logrus.Print("Trying to write something that already exists")
+	// 	return
+	// }
+
+	// _, ok := d.disk.read(hash)
+	// if ok {
+	// 	// Already in disk, done
+	// 	logrus.Print("Trying to write something that already exists")
+	// 	return
+	// }
 
 	// Not in ram or disk
 	if d.ram.Len() < d.maxRAMElems {
 		// Enough space, just write to ram
+		logrus.Trace("Space in RAM, writing to RAM")
 		d.ram.Add(hash, node)
 	} else {
-		// Not enough space, move something in ram to disk
-		logrus.Trace("move something in ram to disk\n")
+		logrus.Trace("No Space in RAM")
+		logrus.Trace("move something in ram to disk")
 		oldHash, oldNode, ok := d.ram.RemoveOldest()
 		if !ok {
 			panic("Should not be empty")
@@ -98,6 +105,8 @@ func (d *ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 
 func (d *ramCacheTreeNodes) delete(hash Hash) {
 
+	logrus.Trace("Cache Level delete ", hash[:6])
+
 	// Delete from ram
 	present := d.ram.Remove(hash)
 
@@ -110,6 +119,11 @@ func (d *ramCacheTreeNodes) delete(hash Hash) {
 // size gives you the size of the forest
 func (d ramCacheTreeNodes) size() uint64 {
 	return d.disk.size() + uint64(d.ram.Len())
+}
+
+// size gives you the disk size of the forest
+func (d ramCacheTreeNodes) diskSize() uint64 {
+	return d.disk.diskSize()
 }
 
 func (d ramCacheTreeNodes) close() {
@@ -370,7 +384,11 @@ func (d *diskTreeNodes) delete(hash Hash) {
 }
 
 // size gives you the size of the forest
-func (d diskTreeNodes) size() uint64 {
+func (d *diskTreeNodes) size() uint64 {
+
+	if (d.filePopulatedTo - uint64(len(d.emptySlots))) != uint64(len(d.indexMap)) {
+		panic("Size not equal to indexmap size")
+	}
 
 	return d.filePopulatedTo - uint64(len(d.emptySlots))
 	// s, err := d.file.Stat()
@@ -381,7 +399,19 @@ func (d diskTreeNodes) size() uint64 {
 	// return uint64(s.Size() / slotSize)
 }
 
-func (d diskTreeNodes) close() {
+// size gives you the size of the forest
+func (d *diskTreeNodes) diskSize() uint64 {
+
+	return d.size()
+	// s, err := d.file.Stat()
+	// if err != nil {
+	// 	fmt.Printf("\tWARNING: %s. Returning 0", err.Error())
+	// 	return 0
+	// }
+	// return uint64(s.Size() / slotSize)
+}
+
+func (d *diskTreeNodes) close() {
 	err := d.file.Close()
 	if err != nil {
 		fmt.Printf("diskForestData close error: %s\n", err.Error())
@@ -393,160 +423,164 @@ type dbTreeNodes struct {
 	count uint64
 }
 
-// func newdbTreeNodes() dbTreeNodes {
+func newdbTreeNodes() dbTreeNodes {
 
-// 	// // Simplest transform function: put all the data files into the base dir.
-// 	// flatTransform := func(s string) []string { return []string{} }
+	db, err := badger.Open(badger.DefaultOptions("./utree/badger"))
 
-// 	db, err := badger.Open(badger.DefaultOptions("./utreexo/badger"))
+	// db, err := db.New()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	// db, err := db.New()
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	// if err := db.Update(func(tx *bolt.Tx) error {
+	// 	_, err := tx.CreateBucket([]byte("treeNodes"))
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return nil
+	// }); err != nil {
+	// 	log.Fatal(err)
+	// }
 
-// 	// if err := db.Update(func(tx *bolt.Tx) error {
-// 	// 	_, err := tx.CreateBucket([]byte("treeNodes"))
-// 	// 	if err != nil {
-// 	// 		return err
-// 	// 	}
-// 	// 	return nil
-// 	// }); err != nil {
-// 	// 	log.Fatal(err)
-// 	// }
+	return dbTreeNodes{db, 0}
+}
 
-// 	return dbTreeNodes{db, 0}
-// }
+func (d *dbTreeNodes) read(hash Hash) (patriciaNode, bool) {
 
-// func (d *dbTreeNodes) read(hash Hash) (patriciaNode, bool) {
+	logrus.Trace("DB Reading ", hash[:6])
+	// startSize := d.size()
 
-// 	// fmt.Printf("\tCalling read\n")
+	var slotBytes [72]byte
+	var left, right Hash
 
-// 	// startSize := d.size()
+	err := d.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(hash[:])
+		if err != nil {
+			logrus.Error("Failed to retrieve", hash[:6])
+			panic(err)
+		}
 
-// 	var slotBytes [72]byte
-// 	var left, right Hash
+		var valCopy []byte
+		err = item.Value(func(val []byte) error {
+			// This func with val would only be called if item.Value encounters no error.
 
-// 	txn := d.db.NewTransaction(true)
+			// // Accessing val here is valid.
+			// fmt.Printf("The answer is: %s\n", val)
 
-// 	err := txn.Set(slotBytes[:], value[:])
+			// Copying or parsing val is valid.
+			valCopy = append([]byte{}, val...)
 
-// 	if err := d.db.Update(func(txn *badger.Txn) error {
+			// // Assigning val slice to another variable is NOT OK.
+			// valNot = val // Do not do this.
+			return nil
+		})
+		if err != nil {
+			panic(err)
+		}
 
-// 		value := tx.Bucket([]byte("treeNodes")).Get(hash[:])
-// 		copy(slotBytes[:], value[:])
-// 		// fmt.Printf("The value of 'foo' is: %s\n", value)
-// 		return nil
-// 	}); err != nil {
-// 		log.Fatal(err)
-// 	}
+		copy(slotBytes[:], valCopy)
 
-// 	// if err != nil {
-// 	// 	fmt.Printf("\tWARNING!! read %x %s\n", hash, err.Error())
-// 	// }
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
 
-// 	// Read the slot into a struct
-// 	copy(left[:], slotBytes[0:32])
-// 	copy(right[:], slotBytes[32:64])
-// 	prefix := binary.LittleEndian.Uint64(slotBytes[64:72])
+	// Read the slot into a struct
+	copy(left[:], slotBytes[0:32])
+	copy(right[:], slotBytes[32:64])
+	prefix := binary.LittleEndian.Uint64(slotBytes[64:72])
 
-// 	// Compile the node struct
-// 	node :=
+	// Compile the node struct
+	node := patriciaNode{left, right, prefixRange(prefix)}
 
-// 	// d.isValid()
+	// d.isValid()
 
-// 	// if readHash != hash {
-// 	// 	fmt.Printf("\tinput hash is %x\n", hash)
-// 	// 	fmt.Printf("\tread hash is %x\n", readHash)
-// 	// 	fmt.Printf("\tcomputed hash is %x\n", node.hash())
-// 	// 	panic("MiniHash Collision TODO do something different to secure this, this is just a kludge in place of a more sophisticated disk-backed key-value store")
-// 	// }
+	// if readHash != hash {
+	// 	fmt.Printf("\tinput hash is %x\n", hash)
+	// 	fmt.Printf("\tread hash is %x\n", readHash)
+	// 	fmt.Printf("\tcomputed hash is %x\n", node.hash())
+	// 	panic("MiniHash Collision TODO do something different to secure this, this is just a kludge in place of a more sophisticated disk-backed key-value store")
+	// }
 
-// 	// if readHash != node.hash() {
-// 	// 	panic("Hash of node is wrong")
-// 	// }
+	// if readHash != node.hash() {
+	// 	panic("Hash of node is wrong")
+	// }
 
-// 	// endSize := d.size()
+	// endSize := d.size()
 
-// 	// fmt.Printf("\t%d %d\n", startSize, endSize)
+	// fmt.Printf("\t%d %d\n", startSize, endSize)
 
-// 	// if endSize-startSize != 0 {
-// 	// 	panic("")
-// 	// }
+	// if endSize-startSize != 0 {
+	// 	panic("")
+	// }
 
-// 	return node, true
-// }
+	return node, true
+}
 
-// // write writes a key-value pair
-// func (d *dbTreeNodes) write(hash Hash, node patriciaNode) {
+// write writes a key-value pair
+func (d *dbTreeNodes) write(hash Hash, node patriciaNode) {
 
-// 	// fmt.Printf("\tCalling write\n")
+	// fmt.Printf("\tCalling write\n")
 
-// 	// _, ok := d.read(hash)
+	logrus.Trace("DB Writing ", hash[:6])
 
-// 	// if ok {
-// 	// 	// Key already present, overwrite it
-// 	// 	panic("This should not happen, the key is always the hash of the value")
-// 	// 	// Futhermore, we should never write twice if something is already there
-// 	// }
+	// _, ok := d.read(hash)
 
-// 	if node.hash() != hash {
-// 		panic("Input node with hash not matching the input hash")
-// 	}
+	// if ok {
+	// 	// Key already present, overwrite it
+	// 	panic("This should not happen, the key is always the hash of the value")
+	// 	// Futhermore, we should never write twice if something is already there
+	// }
 
-// 	slot := append(node.left[:], node.right[:]...)
-// 	midpointBytes := make([]byte, 8)
-// 	binary.LittleEndian.PutUint64(midpointBytes, uint64(node.prefix))
-// 	slot = append(slot, midpointBytes...)
+	if node.hash() != hash {
+		panic("Input node with hash not matching the input hash")
+	}
 
-// 	if len(slot) != 72 {
-// 		panic("Slot wrong size")
-// 	}
+	slot := append(node.left[:], node.right[:]...)
+	midpointBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(midpointBytes, uint64(node.prefix))
+	slot = append(slot, midpointBytes...)
 
-// 	// _, err := d.file.WriteAt(hash[:], int64(indexToWrite*slotSize))
-// 	if err := d.db.Update(func(tx *bolt.Tx) error {
-// 		tx.Bucket([]byte("treeNodes")).Put(hash[:], slot)
-// 		return nil
-// 	}); err != nil {
-// 		log.Fatal(err)
-// 	}
+	if len(slot) != 72 {
+		panic("Slot wrong size")
+	}
 
-// 	// err := b.Put(hash[:], slot)
+	err := d.db.Update(func(txn *badger.Txn) error {
+		err := txn.Set(hash[:], slot[:])
+		return err
+	})
 
-// 	// err := d.db.Write(hex.Dump(hash[:]), slot)
+	if err != nil {
+		panic(err)
+	}
 
-// 	// if err != nil {
-// 	// 	fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
-// 	// 	panic(err.Error())
-// 	// }
+	d.count++
+}
 
-// 	d.count++
-// }
+func (d *dbTreeNodes) delete(hash Hash) {
 
-// func (d *dbTreeNodes) delete(hash Hash) {
+	logrus.Trace("Deleting ", hash[:6])
 
-// 	// d.foosize -= 1
+	// d.foosize -= 1
 
-// 	// fmt.Printf("\tCalling delete\n")
+	// fmt.Printf("\tCalling delete\n")
 
-// 	// err := d.db.Erase(hex.Dump(hash[:]))
+	// err := d.db.Erase(hex.Dump(hash[:]))
 
-// 	// _, err := d.file.WriteAt(hash[:], int64(indexToWrite*slotSize))
-// 	if err := d.db.Update(func(tx *bolt.Tx) error {
-// 		tx.Bucket([]byte("treeNodes")).Delete(hash[:])
-// 		return nil
-// 	}); err != nil {
-// 		log.Fatal(err)
-// 	}
+	// _, err := d.file.WriteAt(hash[:], int64(indexToWrite*slotSize))
+	err := d.db.Update(func(txn *badger.Txn) error {
+		err := txn.Delete(hash[:])
+		return err
+	})
 
-// 	// // not in index so not present
-// 	// if err != nil {
-// 	// 	panic("Deleting thing that does not exist")
-// 	// }
+	if err != nil {
+		panic(err)
+	}
 
-// 	d.count--
+	d.count--
 
-// }
+}
 
 // size gives you the size of the forest
 func (d *dbTreeNodes) size() uint64 {
@@ -560,9 +594,21 @@ func (d *dbTreeNodes) size() uint64 {
 	// return uint64(s.Size() / slotSize)
 }
 
-func (d *dbTreeNodes) close() {
-	// err := d.db.Close()
+// size gives you the size of the forest
+func (d *dbTreeNodes) diskSize() uint64 {
+
+	return uint64(d.count)
+	// s, err := d.file.Stat()
 	// if err != nil {
-	// 	fmt.Printf("diskForestData close error: %s\n", err.Error())
+	// 	fmt.Printf("\tWARNING: %s. Returning 0", err.Error())
+	// 	return 0
 	// }
+	// return uint64(s.Size() / slotSize)
+}
+
+func (d *dbTreeNodes) close() {
+	err := d.db.Close()
+	if err != nil {
+		fmt.Printf("diskForestData close error: %s\n", err.Error())
+	}
 }

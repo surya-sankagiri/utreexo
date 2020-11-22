@@ -97,6 +97,18 @@ type Forest struct {
 
 // Typedef for midpoints to represent ranges?
 
+func (f *Forest) DiskSlotsUsed() uint64 {
+
+	return f.lookup.treeNodes.diskSize()
+
+}
+
+func (f *Forest) LeafLocationSize() uint64 {
+
+	return uint64(len(f.lookup.leafLocations))
+
+}
+
 type patriciaLookup struct {
 	stateRoot     Hash
 	treeNodes     ForestData
@@ -829,7 +841,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 			// f.data = d
 		} else {
 			// for on-disk with cache
-			// Max 10000 elems in ram to start
+			// 2_000_000 lems in ram seems good, not really enough to cause ram issues, but enough to speed things up
 			treeNodes := newRAMCacheTreeNodes(forestFile, 2000000)
 			// for on disk
 			// treeNodes := newDiskTreeNodes(forestFile)

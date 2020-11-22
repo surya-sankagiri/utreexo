@@ -97,8 +97,17 @@ func BuildProofs(
 	}
 	datafile.WriteString("Block Number, Uncompressed, zlib, gzip, flate")
 	defer datafile.Close()
+
+	logfile, err := os.OpenFile("logfile.log",
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+	}
+
 	start := time.Now()
+
 	// Set logging level
+	logrus.SetOutput(logfile)
 	logrus.SetLevel(logrus.InfoLevel)
 	for ; height != knownTipHeight && !stop; height++ {
 
@@ -183,17 +192,20 @@ func BuildProofs(
 		}
 
 		if bnr.Height%100 == 0 {
-			fmt.Println("On block :", bnr.Height+1)
+			logrus.Println("On block :", bnr.Height+1)
 			t := time.Now()
-			fmt.Println("Time elapsed: ", t.Sub(start))
-			fmt.Println("Time for building proofs:", t1.Sub(t0))
-			fmt.Println("Time for zlib:", t2.Sub(t1))
-			// fmt.Println("Time for gzip:", t3.Sub(t2))
-			// fmt.Println("Time for flaked:", t4.Sub(t3))
-			fmt.Println("Time for modifying forest:", t.Sub(t2))
+			logrus.Println("Time elapsed: ", t.Sub(start))
+			logrus.Println("Time for building proofs:", t1.Sub(t0))
+			logrus.Println("Time for zlib:", t2.Sub(t1))
+			// logrus.Println("Time for gzip:", t3.Sub(t2))
+			// logrus.Println("Time for flaked:", t4.Sub(t3))
+			logrus.Println("Time for modifying forest:", t.Sub(t2))
+
+			logrus.Println("Disk Slots Used:", forest.DiskSlotsUsed())
+			logrus.Println("Number of Leaves", forest.LeafLocationSize())
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
-			fmt.Println("Alloc:", m.Alloc,
+			logrus.Println("Alloc:", m.Alloc,
 				"TotalAlloc:", m.TotalAlloc,
 				"HeapAlloc:", m.HeapAlloc)
 		}
