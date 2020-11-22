@@ -226,7 +226,7 @@ func (d *diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	prefixUint := binary.LittleEndian.Uint64(slotBytes[96:104])
 
 	// Compile the node struct
-	node := newInternalPatriciaNode(left, right, prefixRange(prefixUint))
+	node := patriciaNode{left, right, prefixRange(prefixUint)}
 
 	// d.isValid()
 

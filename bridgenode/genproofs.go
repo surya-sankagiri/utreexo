@@ -192,6 +192,7 @@ func BuildProofs(
 		}
 
 		if bnr.Height%100 == 0 {
+			fmt.Println("On block :", bnr.Height+1)
 			logrus.Println("On block :", bnr.Height+1)
 			t := time.Now()
 			logrus.Println("Time elapsed: ", t.Sub(start))
