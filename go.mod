@@ -8,8 +8,10 @@ require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/btcsuite/btcd v0.20.1-beta
 	github.com/btcsuite/btcutil v1.0.2
+	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4
+	github.com/openconfig/goyang v0.2.1
 	github.com/peterbourgon/diskv v2.0.1+incompatible
 	github.com/prologic/bitcask v0.3.6
 	github.com/sirupsen/logrus v1.6.0

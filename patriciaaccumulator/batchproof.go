@@ -21,16 +21,19 @@ import (
 
 // BatchProof consists of a proof for a batch of leaves
 type BatchProof struct {
-	Targets        []uint64
-	hashes         []Hash  // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
-	midpointsWidth []uint8 // List of widths of midpoints of nodes that are ancestors of deleted elements
+	Targets []uint64
+	// List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements)
+	// Should be in DFS order by midpoint of the node prefix
+	hashes []Hash
+	// List of log widths of prefixes of nodes that are ancestors of deleted elements (in DFS order, starting with the leftmost leaf )
+	prefixLogWidths []uint8
 }
 
-// LongBatchProof is a similar to BatchProof, but with midpoints explicit. in the PatriciaAccumulator Implementation - Bolton
+// LongBatchProof is a similar to BatchProof, but with prefixes explicit.
 type LongBatchProof struct {
-	Targets   []uint64
-	hashes    []Hash   // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
-	midpoints []uint64 // List of equal midpoints of nodes that are ancestors of deleted elements
+	Targets  []uint64
+	hashes   []Hash        // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
+	prefixes []prefixRange // List of equal midpoints of nodes that are ancestors of deleted elements
 	// Checking a proof requires all midpoints in the branch to the element, and all hashes of siblings
 	// We therefore have the midpoint tree. Our first step in proof checking is constructing this tree
 	// We then have to fill in the hashes of the children we proceed in order left to right
@@ -41,9 +44,9 @@ type LongBatchProof struct {
 
 // PatriciaProof is a potential replacement structure for a single proof
 type PatriciaProof struct {
-	target    uint64
-	hashes    []Hash   // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
-	midpoints []uint64 // List of equal midpoints of nodes that are ancestors of deleted elements
+	target   uint64
+	hashes   []Hash        // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
+	prefixes []prefixRange // List of prefixes of nodes that are ancestors of deleted elements
 	// Checking a proof requires all midpoints in the branch to the element, and all hashes of siblings
 	// We therefore have the midpoint tree. Our first step in proof checking is constructing this tree
 	// We then have to fill in the hashes of the children we proceed in order left to right
@@ -143,7 +146,7 @@ func (bp *BatchProof) ToBytes() []byte {
 		panic("error in converting batchproof to bytes.")
 	}
 	// then write the number of midpoints (4 byte uint32)
-	numMidpoints := uint32(len(bp.midpointsWidth))
+	numMidpoints := uint32(len(bp.prefixLogWidths))
 	if numMidpoints == 0 {
 		// TODO its actually possible, i think if we have a single element tree, then there is one target and nothing else
 		// panic("non-zero Targets but no midpoints.")
@@ -160,7 +163,7 @@ func (bp *BatchProof) ToBytes() []byte {
 		}
 	}
 	// this is followed by the midpoints
-	for _, m := range bp.midpointsWidth {
+	for _, m := range bp.prefixLogWidths {
 		err := binary.Write(&buf, binary.BigEndian, m)
 		if err != nil {
 			panic("error in converting batchproof to bytes.")
@@ -254,9 +257,9 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 		return bp, err
 	}
 
-	// read 4 byte number of midpoints
-	var numMidpoints uint32
-	err = binary.Read(buf, binary.BigEndian, &numMidpoints)
+	// read 4 byte number of prefixes
+	var numPrefixes uint32
+	err = binary.Read(buf, binary.BigEndian, &numPrefixes)
 	if err != nil {
 		return bp, err
 	}
@@ -269,9 +272,9 @@ func FromBytesBatchProof(b []byte) (BatchProof, error) {
 		}
 	}
 	//read the midpoints
-	bp.midpointsWidth = make([]uint8, numMidpoints)
-	for i := range bp.midpointsWidth {
-		err := binary.Read(buf, binary.BigEndian, &bp.midpointsWidth[i])
+	bp.prefixLogWidths = make([]uint8, numPrefixes)
+	for i := range bp.prefixLogWidths {
+		err := binary.Read(buf, binary.BigEndian, &bp.prefixLogWidths[i])
 		if err != nil {
 			return bp, err
 		}
@@ -339,7 +342,7 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 		panic("Wrong number of targets")
 	}
 
-	if len(bp.midpoints) == 0 {
+	if len(bp.prefixes) == 0 {
 		// This should mean there is a single leaf
 		if len(bp.Targets) != 1 {
 			panic("Not a single leaf")
@@ -349,34 +352,34 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 		return leafHashes[0], 1
 	}
 
-	biggestMidpoint := bp.midpoints[0]
+	biggestPrefix := bp.prefixes[0]
 	// Figure out the root midpoint
-	for _, midpoint := range bp.midpoints {
-		if subset(biggestMidpoint, midpoint) {
-			biggestMidpoint = midpoint
+	for _, prefix := range bp.prefixes {
+		if biggestPrefix.subset(prefix) {
+			biggestPrefix = prefix
 		}
 	}
-	rootMidpoint := biggestMidpoint
+	rootPrefix := biggestPrefix
 
 	// Does the root midpoint have two children?
 	var leftBatchProof, rightBatchProof LongBatchProof
 	hasLeftChild := false
 	hasRightChild := false
-	for _, midpoint := range bp.midpoints {
-		if midpoint < rootMidpoint {
+	for _, prefix := range bp.prefixes {
+		if prefix.midpoint() < rootPrefix.midpoint() {
 			hasLeftChild = true
-			leftBatchProof.midpoints = append(leftBatchProof.midpoints, midpoint)
-		} else if midpoint > rootMidpoint {
+			leftBatchProof.prefixes = append(leftBatchProof.prefixes, prefix)
+		} else if prefix.midpoint() > rootPrefix.midpoint() {
 			hasRightChild = true
-			rightBatchProof.midpoints = append(rightBatchProof.midpoints, midpoint)
+			rightBatchProof.prefixes = append(rightBatchProof.prefixes, prefix)
 		}
 	}
 	for _, target := range bp.Targets {
-		if target < rootMidpoint {
+		if target < rootPrefix.midpoint() {
 			hasLeftChild = true
 			leftBatchProof.Targets = append(leftBatchProof.Targets, target)
 
-		} else if target >= rootMidpoint { // Equal means target in right side
+		} else if target >= rootPrefix.midpoint() { // Equal means target in right side
 			hasRightChild = true
 			rightBatchProof.Targets = append(rightBatchProof.Targets, target)
 
@@ -392,7 +395,7 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 		rightBatchProof.hashes = bp.hashes[leftUsed:]
 		rightHash, rightUsed := rightBatchProof.getRootHash(leafHashes[len(leftBatchProof.Targets):])
 
-		node := patriciaNode{leftHash, rightHash, rootMidpoint}
+		node := newInternalPatriciaNode(leftHash, rightHash, rootPrefix)
 
 		return node.hash(), leftUsed + rightUsed
 	}
@@ -402,7 +405,7 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 		leftHash, leftUsed := leftBatchProof.getRootHash(leafHashes[:len(leftBatchProof.Targets)])
 		// rightBatchProof.hashes = bp.hashes[leftUsed:]
 		// leftNode, rightUsed := rightBatchProof.getRootHash(leafHashes[len(leftBatchProof.Targets):])
-		node := patriciaNode{leftHash, bp.hashes[leftUsed], rootMidpoint}
+		node := newInternalPatriciaNode(leftHash, bp.hashes[leftUsed], rootPrefix)
 
 		return node.hash(), leftUsed + 1
 	}
@@ -412,7 +415,7 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 		rightBatchProof.hashes = bp.hashes[leftUsed:]
 		rightHash, rightUsed := rightBatchProof.getRootHash(leafHashes[len(leftBatchProof.Targets):])
 
-		node := patriciaNode{bp.hashes[0], rightHash, rootMidpoint}
+		node := newInternalPatriciaNode(bp.hashes[0], rightHash, rootPrefix)
 
 		return node.hash(), 1 + rightUsed
 	}

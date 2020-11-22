@@ -1,14 +1,12 @@
 package patriciaaccumulator
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
-	"math/bits"
 	"os"
 	"sort"
 	"time"
 
+	"github.com/openconfig/goyang/pkg/indent"
 	logrus "github.com/sirupsen/logrus"
 )
 
@@ -105,114 +103,6 @@ type patriciaLookup struct {
 	leafLocations map[MiniHash]uint64
 }
 
-type patriciaNode struct {
-	left     Hash
-	right    Hash
-	midpoint uint64 // The midpoint of the binary interval represented by the common
-}
-
-// Just for fun, making a type
-
-// // BinaryInterval represents
-// type BinaryInterval uint64
-
-// Utility to determine of one midpoint range contains another
-func subset(a, b uint64) bool {
-	//
-	halfWidthA := ((a - 1) & a) ^ a
-	halfWidthB := ((b - 1) & b) ^ b
-
-	return (b-halfWidthB <= a-halfWidthA) && (a+halfWidthA <= b-halfWidthB)
-
-}
-
-func (p *patriciaNode) min() uint64 {
-	// If a leaf node,
-	if p.left == p.right {
-		return p.midpoint
-	}
-	halfWidth := ((p.midpoint - 1) & p.midpoint) ^ p.midpoint
-	return p.midpoint - halfWidth
-}
-
-func (p *patriciaNode) max() uint64 {
-	// If a leaf node,
-	if p.left == p.right {
-		return p.midpoint + 1
-	}
-	halfWidth := ((p.midpoint - 1) & p.midpoint) ^ p.midpoint
-	return p.midpoint + halfWidth
-}
-
-func (p *patriciaNode) inRange(v uint64) bool {
-	// If a leaf node, in range if equal to location
-	if p.left == p.right {
-		return v == p.midpoint
-	}
-	// Otherwise
-	return p.min() <= v && v < p.max()
-}
-
-func (p *patriciaNode) inLeft(v uint64) bool {
-	if p.left == p.right {
-		panic("inLeft should not be called on leaf node")
-	}
-	if p.midpoint == 0 {
-		panic("inLeft should not be called on midpoint 0")
-	}
-	return p.min() <= v && v < p.midpoint
-}
-
-func (p *patriciaNode) hash() Hash {
-	// var empty Hash
-	// if p.left == empty || p.right == empty {
-	// 	panic("got an empty leaf here. ")
-	// }
-	hashBytes := append(p.left[:], p.right[:]...)
-	midpointBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(midpointBytes, p.midpoint)
-	return sha256.Sum256(append(hashBytes, midpointBytes...))
-}
-
-func newPatriciaNode(child1, child2 patriciaNode) patriciaNode {
-
-	var p patriciaNode
-
-	var leftChild, rightChild patriciaNode
-
-	if !(child1.max() <= child2.min() || child2.max() <= child1.min()) {
-		panic(fmt.Sprintf("Cannot combine nodes with overlapping ranges %d to %d and %d to %d", child1.min(), child1.max(), child2.min(), child2.max()))
-	}
-	if !(child1.min() < child1.max()) {
-		panic(fmt.Sprintf("Node has min (%d) not less than max (%d)", child1.min(), child1.max()))
-	}
-	if !(child2.min() < child2.max()) {
-		panic(fmt.Sprintf("Node has min (%d) not less than max (%d)", child2.min(), child2.max()))
-	}
-	// Does child1 come first?
-	if child1.min() < child2.min() {
-		leftChild = child1
-		rightChild = child2
-	} else {
-		leftChild = child2
-		rightChild = child1
-	}
-
-	p.left = leftChild.hash()
-	p.right = rightChild.hash()
-
-	differentBits := leftChild.midpoint ^ rightChild.midpoint
-
-	i := bits.Reverse64(differentBits)
-	i = i &^ (i - 1)
-	i = bits.Reverse64(i)
-	// i is first different bit between child midpoints
-
-	p.midpoint = (leftChild.midpoint &^ (i - 1)) | i
-
-	return p
-}
-
 // func NewPatriciaLookup() *patriciaLookup {
 // 	t := new(patriciaLookup)
 // 	t.treeNodes = make(map[Hash]patriciaNode)
@@ -240,11 +130,11 @@ func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 	out := ""
 
 	if node.left == node.right {
-		return fmt.Sprint("leafnode ", "hash ", nodeHash[:6], " midpoint ", node.midpoint, " left ", node.left[:6], " right ", node.right[:6], "\n")
+		return fmt.Sprint("leafnode ", "hash ", nodeHash[:6], " at postion ", node.prefix.value(), " left ", node.left[:6], " right ", node.right[:6], "\n")
 	}
-	out += fmt.Sprint("hash ", nodeHash[:6], " midpoint ", node.midpoint, " left ", node.left[:6], " right ", node.right[:6], "\n")
-	out += t.subtreeString(node.left)
-	out += t.subtreeString(node.right)
+	out += fmt.Sprint("hash ", nodeHash[:6], " prefix:", node.prefix.String(), " left ", node.left[:6], " right ", node.right[:6], "\n")
+	out += indent.String(" ", t.subtreeString(node.left))
+	out += indent.String(" ", t.subtreeString(node.right))
 
 	return out
 }
@@ -272,7 +162,7 @@ func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 
 	var proof PatriciaProof
-	proof.midpoints = make([]uint64, 0, 64)
+	proof.prefixes = make([]prefixRange, 0, 64)
 	proof.hashes = make([]Hash, 0, 64)
 	var node patriciaNode
 	var nodeHash Hash
@@ -287,9 +177,9 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	}
 	// Discover the path to the leaf
 	for {
-		logrus.Debug(fmt.Sprintln(node.midpoint, target))
-		proof.midpoints = append(proof.midpoints, node.midpoint)
-		if !node.inRange(target) {
+		logrus.Debug(fmt.Sprintln("Descending to leaf - at node", node.prefix.min(), node.prefix.max(), target))
+		proof.prefixes = append(proof.prefixes, node.prefix)
+		if !node.prefix.contains(target) {
 			// The target location is not in range; this is an error
 			// REMARK (SURYA): The current system has no use for proof of non-existence, nor has the means to create one
 			return proof, fmt.Errorf("target location %d not found", target)
@@ -300,25 +190,29 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 		if node.left == node.right {
 			// REMARK (SURYA): We do not check whether the hash corresponds to the hash of a leaf
 			//perform a sanity check here
-			if len(proof.midpoints) != len(proof.hashes)+1 {
+			if len(proof.prefixes) != len(proof.hashes)+1 {
 				panic("# midpoints not equal to # hashes")
 			}
-			if node.midpoint != target {
+			if node.prefix.value() != target {
 				panic("midpoint of leaf not equal to target")
 			}
 			// proof = ConstructProof(target, midpoints, neighborHashes)
 			logrus.Trace("Returning valid proof")
 			return proof, nil
 		}
-		if !node.inRange(target) {
+		if !node.prefix.contains(target) {
 			panic("Target not in range in RetrieveProof")
 		}
-		if node.inLeft(target) {
+		if node.prefix.left().contains(target) {
+			logrus.Debug("Descending Left")
 			nodeHash = node.left
 			neighborHash = node.right
-		} else {
+		} else if node.prefix.right().contains(target) {
+			logrus.Debug("Descending Right")
 			nodeHash = node.right
 			neighborHash = node.left
+		} else {
+			return proof, fmt.Errorf("Neither side contains target %d", target)
 		}
 
 		// We are not yet at the leaf, so we descend the tree.
@@ -381,7 +275,7 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 		go func() {
 			proof, err := t.RetrieveProof(target)
 			if err != nil {
-				panic("Error retrieving proof")
+				panic(err)
 			}
 			ch <- proof
 		}()
@@ -492,23 +386,23 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 
 	// A slice of proofs of individual elements
 	// RetrieveListProofs creates a list of individual proofs for targets, **in sorted order**
-	logrus.Debug("Calling RetrieveListProofs")
+	logrus.Trace("Calling RetrieveListProofs")
 	individualProofs, _ := t.RetrieveListProofs(targets)
-	// midpointsWidth is a slice that will go into the BatchProof; it will replace the slice of midpoints
-	// TODO: convert midpointsWidth to []uint8
-	var midpointsWidth = make([]uint8, 0, 0)
-	// midpointsSet is used to remove repeated entries
-	var midpointsSet = make(map[uint64]bool)
-	var width uint8
-	// Add midpoints, one individualProof at a time, to midpointsWidth, and use midpointsSet to remove redundancies
+	// prefixesWidth is a slice that will go into the BatchProof; it will replace the slice of prefixes
+	// TODO: convert prefixesWidth to []uint8
+	var prefixLogWidths = make([]uint8, 0, 0)
+	// prefixesSet is used to remove repeated entries
+	var prefixesSet = make(map[prefixRange]bool)
+
+	// Add prefixes, one individualProof at a time, to prefixesWidth, and use prefixesSet to remove redundancies
 	for _, proof := range individualProofs {
-		midpointsWidth = append(midpointsWidth, 0)
-		for _, midpoint := range proof.midpoints {
-			//check if this midpoint has already been seen before
-			if _, ok := midpointsSet[midpoint]; !ok {
-				midpointsSet[midpoint] = true
-				width = calculateWidth(midpoint) + 1
-				midpointsWidth = append(midpointsWidth, width)
+		prefixLogWidths = append(prefixLogWidths, 0)
+		for _, prefix := range proof.prefixes {
+			//check if this prefix has already been seen before
+			if _, ok := prefixesSet[prefix]; !ok {
+				prefixesSet[prefix] = true
+				logWidth := prefix.logWidth() + 1
+				prefixLogWidths = append(prefixLogWidths, logWidth)
 			}
 		}
 	}
@@ -526,8 +420,8 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 		// fmt.Println(proofCurrent)
 		// fmt.Println(proofPrev)
 		// Iterate through i and i-1 to find the fork
-		for j, midpoint := range proofCurrent.midpoints {
-			if midpoint != proofPrev.midpoints[j] {
+		for j, prefix := range proofCurrent.prefixes {
+			if prefix != proofPrev.prefixes[j] {
 				// Fork found
 				// Delete the hashes at j-1 from both
 				// filterDelete(hashes, proofCurrent.hashes[j-1])
@@ -548,18 +442,7 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 	}
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-	return BatchProof{targets, hashes, midpointsWidth}
-}
-
-// TODO: convert width to uint8
-func calculateWidth(midpoint uint64) uint8 {
-	var width uint8
-	width = 0
-	for (midpoint & 1) == 0 {
-		midpoint = midpoint >> 1
-		width++
-	}
-	return width
+	return BatchProof{targets, hashes, prefixLogWidths}
 }
 
 // ProveBatch Returns a BatchProof proving a list of hashes against a forest
@@ -617,7 +500,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	// branch := t.RetrieveProof(toAdd, location)
 
 	// Add the new leaf node
-	newLeafNode := patriciaNode{toAdd, toAdd, location}
+	newLeafNode := newLeafPatriciaNode(toAdd, location)
 	t.treeNodes.write(newLeafNode.hash(), newLeafNode)
 	t.leafLocations[toAdd.Mini()] = location
 
@@ -636,7 +519,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	}
 	node, ok := t.treeNodes.read(t.stateRoot)
-	logrus.Debug("starting root midpoint is", node.midpoint)
+	logrus.Debug("starting root range is", node.prefix.min(), node.prefix.max())
 	if !ok {
 		return fmt.Errorf("state root %x not found", t.stateRoot)
 	}
@@ -648,7 +531,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 
 	// We descend the tree until we find a node which does not contain the location at which we are adding
 	// This node should be the sibling of the new leaf
-	for node.inRange(location) {
+	for node.prefix.contains(location) {
 		// mainBranch will consist of all the nodes to be replaced, from the root to the parent of the new sibling of the new leaf
 		mainBranch = append(mainBranch, node)
 		// If the min is the max, we are at a preexisting leaf
@@ -659,7 +542,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 		}
 
 		// Determine if we descend left or right
-		if node.inLeft(location) {
+		if node.prefix.left().contains(location) {
 			neighbor, _ = t.treeNodes.read(node.right)
 			hash = node.left
 		} else {
@@ -730,7 +613,7 @@ func (t *patriciaLookup) remove(location uint64) {
 		mainBranch = append(mainBranch, node)
 
 		// Determine if we descend left or right
-		if node.inLeft(location) {
+		if node.prefix.left().contains(location) {
 			neighbor, _ = t.treeNodes.read(node.right)
 			hash = node.left
 		} else {
@@ -753,14 +636,14 @@ func (t *patriciaLookup) remove(location uint64) {
 	if !ok {
 		panic("Didn't find location")
 	}
-	if loc != node.midpoint {
+	if loc != node.prefix.value() {
 		panic("Location does not match")
 	}
 	delete(t.leafLocations, node.left.Mini())
 
 	// Check that the leaf node we found has the right location
-	if node.midpoint != location {
-		panic(fmt.Sprintf("Found wrong location in remove, location is %d, but midpoint is %d", location, node.midpoint))
+	if node.prefix.value() != location {
+		panic(fmt.Sprintf("Found wrong location in remove"))
 	}
 
 	// Delete all nodes in the main branch, they are to be replaced
@@ -812,8 +695,9 @@ func (t *patriciaLookup) remove(location uint64) {
 // also returns whether any elements remain in that subtree
 func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash, bool, error) {
 
-	logrus.Debug("Starting recursive remove")
+	logrus.Trace("Starting recursive remove from subtree")
 
+	// CHeck if anything to be removed
 	if len(locations) == 0 {
 		return hash, false, nil
 	}
@@ -828,15 +712,27 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 	// logrus.Debug("Removing", locations, node.midpoint, node.left, node.right)
 
 	// check all locations in the right range
-	if !node.inRange(locations[0]) || !node.inRange(locations[len(locations)-1]) {
-		logrus.Debug(locations, node.midpoint)
+	if !node.prefix.contains(locations[0]) || !node.prefix.contains(locations[len(locations)-1]) {
+		logrus.Debug(locations, node.prefix.min(), node.prefix.max())
 		panic("Not in range, in removeFromSubtree")
+	}
+
+	// Check if leaf node
+	if node.left == node.right {
+		if len(locations) != 1 {
+			panic("Not 1 element at leaf")
+		}
+		if locations[0] != node.prefix.value() {
+			panic("Wrong leaf found in remove subtree")
+		}
+		delete(t.leafLocations, node.left.Mini())
+		return empty, true, nil
 	}
 
 	var idx int
 	idx = len(locations)
 	for i, location := range locations {
-		if location >= node.midpoint {
+		if node.prefix.right().contains(location) {
 			idx = i
 			break
 		}
@@ -844,19 +740,6 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 
 	leftLocations := locations[:idx]
 	rightLocations := locations[idx:]
-
-	// newLeft := node.left
-	// newRight := node.right
-	if node.left == node.right {
-		if len(locations) != 1 {
-			panic("Not 1 element at leaf")
-		}
-		if locations[0] != node.midpoint {
-			panic("Wrong leaf found in remove subtree")
-		}
-		delete(t.leafLocations, node.left.Mini())
-		return empty, true, nil
-	}
 
 	// Remove all locations from the left side of the tree
 	newLeft, leftDeleted, err := t.removeFromSubtree(leftLocations, node.left)
@@ -874,7 +757,7 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 
 	if !leftDeleted && !rightDeleted {
 		// Recompute the new tree node for the parent of both sides
-		newNode := patriciaNode{newLeft, newRight, node.midpoint}
+		newNode := newInternalPatriciaNode(newLeft, newRight, node.prefix)
 		newHash := newNode.hash()
 
 		t.treeNodes.write(newHash, newNode)
@@ -947,7 +830,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		} else {
 			// for on-disk with cache
 			// Max 10000 elems in ram to start
-			treeNodes := newRAMCacheTreeNodes(forestFile, 10000000)
+			treeNodes := newRAMCacheTreeNodes(forestFile, 2000000)
 			// for on disk
 			// treeNodes := newDiskTreeNodes(forestFile)
 			// for bitcask/diskv
@@ -957,8 +840,6 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 			// if treeNodes.size() != 0 {
 			// 	panic("")
 			// }
-
-			// node := patriciaNode{empty, empty, 0}
 
 			// treeNodes.write(node.hash(), node)
 
@@ -1055,7 +936,7 @@ var empty [32]byte
 // 		if len(adds) != 1 {
 // 			panic("The first block has one add")
 // 		}
-// 		siblingNode := patriciaNode{adds[0], adds[0], startLocation}
+// 		siblingNode :=
 // 		newHash := siblingNode.hash()
 // 		t.treeNodes.write(newHash, siblingNode)
 // 		t.leafLocations[adds[0]] = startLocation
@@ -1089,7 +970,7 @@ var empty [32]byte
 // 		panic(err)
 // 	}
 
-// 	newNode := patriciaNode{node.left, newRightHash, node.midpoint}
+// 	newNode :=
 // 	t.treeNodes.write(newNode.hash(), newNode)
 
 // 	// If there are no additional adds, we replace the right child with the new right child
@@ -1102,7 +983,7 @@ var empty [32]byte
 // 		// they must go in a new subtree which joins with the old node to make a new node
 // 		// Form the rest into their own subtree
 
-// 		siblingNode := patriciaNode{outsideNode[0], outsideNode[0], startLocation + i}
+// 		siblingNode :=
 // 		siblingNodeHash := siblingNode.hash()
 // 		t.treeNodes.write(siblingNodeHash, siblingNode)
 // 		t.leafLocations[outsideNode[0]] = startLocation + i
@@ -1130,9 +1011,9 @@ func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint
 	}
 
 	var i uint64
-	i = node.max() - startLocation
+	i = node.prefix.max() - startLocation
 
-	if node.max() < startLocation {
+	if node.prefix.max() < startLocation {
 		i = 0
 	}
 
@@ -1155,7 +1036,7 @@ func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint
 		if err != nil {
 			panic(err)
 		}
-		newNode = patriciaNode{node.left, newRightHash, node.midpoint}
+		newNode = newInternalPatriciaNode(node.left, newRightHash, node.prefix)
 	} else {
 		newNode = node
 	}
@@ -1170,7 +1051,7 @@ func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint
 		// they must go in a new subtree which joins with the old node to make a new node
 		// Form the rest into their own subtree
 
-		siblingNode := patriciaNode{outsideNode[0], outsideNode[0], startLocation + i}
+		siblingNode := newLeafPatriciaNode(outsideNode[0], startLocation+i)
 		siblingNodeHash := siblingNode.hash()
 		t.treeNodes.write(siblingNodeHash, siblingNode)
 		t.leafLocations[outsideNode[0].Mini()] = startLocation + i
@@ -1215,7 +1096,7 @@ func (f *Forest) addv2(adds []Leaf) error {
 		if len(adds) != 1 {
 			panic("The first block has one add")
 		}
-		rootNode := patriciaNode{addHashes[0], addHashes[0], 0}
+		rootNode := newLeafPatriciaNode(addHashes[0], 0)
 		newHash := rootNode.hash()
 		f.lookup.treeNodes.write(newHash, rootNode)
 		f.lookup.leafLocations[addHashes[0].Mini()] = 0
