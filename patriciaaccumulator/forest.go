@@ -842,7 +842,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		} else {
 			// for on-disk with cache
 			// 2_000_000 lems in ram seems good, not really enough to cause ram issues, but enough to speed things up
-			treeNodes := newRAMCacheTreeNodes(forestFile, 2000000)
+			treeNodes := newRAMCacheTreeNodes(forestFile, 200)
 			// for on disk
 			// treeNodes := newDiskTreeNodes(forestFile)
 			// for bitcask/diskv
@@ -1013,7 +1013,8 @@ var empty [32]byte
 // }
 
 // Adds hashes to the tree under node hash with starting location
-// Returns the new hash of the root to replace the at
+// Returns the new hash of the root to replace the given node
+// Given node assumed to be deleted before this function is called
 func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint64, adds []Hash) (Hash, error) {
 
 	logrus.Debug("Starting recursive add")
@@ -1052,6 +1053,7 @@ func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint
 	} else {
 		newNode = node
 	}
+
 	newNodeHash := newNode.hash()
 	t.treeNodes.write(newNodeHash, newNode)
 
@@ -1068,12 +1070,14 @@ func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint
 		t.treeNodes.write(siblingNodeHash, siblingNode)
 		t.leafLocations[outsideNode[0].Mini()] = startLocation + i
 		combinedNode := newPatriciaNode(newNode, siblingNode)
-		combinedNodeHash := combinedNode.hash()
-		t.treeNodes.write(combinedNodeHash, combinedNode)
+
+		// t.treeNodes.write(combinedNodeHash, combinedNode)
+
 		if len(outsideNode) > 1 {
 			newNewNodeHash, err := t.recursiveAddRight(combinedNode, startLocation+i+1, outsideNode[1:])
 			return newNewNodeHash, err
 		} else {
+			combinedNodeHash := combinedNode.hash()
 			t.treeNodes.write(combinedNodeHash, combinedNode)
 			return combinedNodeHash, nil
 		}

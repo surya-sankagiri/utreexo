@@ -69,20 +69,18 @@ func (d *ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 
 	logrus.Trace("Cache Level write ", hash[:6])
 
-	// inRAM := d.ram.Contains(hash)
+	inRAM := d.ram.Contains(hash)
 
-	// if inRAM {
-	// 	// d.ram[hash] = node
-	// 	logrus.Print("Trying to write something that already exists")
-	// 	return
-	// }
+	if inRAM {
+		// d.ram[hash] = node
+		panic("Trying to write something that already exists")
+	}
 
-	// _, ok := d.disk.read(hash)
-	// if ok {
-	// 	// Already in disk, done
-	// 	logrus.Print("Trying to write something that already exists")
-	// 	return
-	// }
+	_, ok := d.disk.read(hash)
+	if ok {
+		// Already in disk, done
+		panic("Trying to write something that already exists")
+	}
 
 	// Not in ram or disk
 	if d.ram.Len() < d.maxRAMElems {
@@ -275,13 +273,12 @@ func (d *diskTreeNodes) write(hash Hash, node patriciaNode) {
 
 	fileSize = d.fileSize()
 
-	// _, ok := d.read(hash)
+	_, ok := d.read(hash)
 
-	// if ok {
-	// 	// Key already present, overwrite it
-	// 	panic("This should not happen, the key is always the hash of the value")
-	// 	// Futhermore, we should never write twice if something is already there
-	// }
+	if ok {
+		// Key already present,
+		panic("This should not happen, we should never write twice if something is already there")
+	}
 
 	if node.hash() != hash {
 		panic("Input node with hash not matching the input hash")
@@ -312,9 +309,9 @@ func (d *diskTreeNodes) write(hash Hash, node patriciaNode) {
 	_, err := d.file.WriteAt(hash[:], int64(indexToWrite*slotSize))
 	_, err = d.file.WriteAt(node.left[:], int64(indexToWrite*slotSize+32))
 	_, err = d.file.WriteAt(node.right[:], int64(indexToWrite*slotSize+64))
-	midpointBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(midpointBytes, uint64(node.prefix))
-	_, err = d.file.WriteAt(midpointBytes[:], int64(indexToWrite*slotSize+96))
+	prefixBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(prefixBytes, uint64(node.prefix))
+	_, err = d.file.WriteAt(prefixBytes[:], int64(indexToWrite*slotSize+96))
 
 	// Update the index
 	d.indexMap[hash.Mini()] = indexToWrite
@@ -386,29 +383,20 @@ func (d *diskTreeNodes) delete(hash Hash) {
 // size gives you the size of the forest
 func (d *diskTreeNodes) size() uint64 {
 
-	if (d.filePopulatedTo - uint64(len(d.emptySlots))) != uint64(len(d.indexMap)) {
-		panic("Size not equal to indexmap size")
+	s := d.filePopulatedTo - uint64(len(d.emptySlots))
+
+	if s != uint64(len(d.indexMap)) {
+		panic(fmt.Sprint("Size not equal to indexmap size", s, uint64(len(d.indexMap))))
 	}
 
-	return d.filePopulatedTo - uint64(len(d.emptySlots))
-	// s, err := d.file.Stat()
-	// if err != nil {
-	// 	fmt.Printf("\tWARNING: %s. Returning 0", err.Error())
-	// 	return 0
-	// }
-	// return uint64(s.Size() / slotSize)
+	return s
+
 }
 
-// size gives you the size of the forest
 func (d *diskTreeNodes) diskSize() uint64 {
 
 	return d.size()
-	// s, err := d.file.Stat()
-	// if err != nil {
-	// 	fmt.Printf("\tWARNING: %s. Returning 0", err.Error())
-	// 	return 0
-	// }
-	// return uint64(s.Size() / slotSize)
+
 }
 
 func (d *diskTreeNodes) close() {
