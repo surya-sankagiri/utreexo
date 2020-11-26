@@ -301,3 +301,38 @@ func TestDeleteNonExisting(t *testing.T) {
 // 		}
 // 	}
 // }
+
+// func (d diskTreeNodes) isValid() {
+// 	fmt.Printf("\tCheckingisvalid\n")
+// 	fmt.Printf("\tSize is %d, file size is %d\n", d.size(), d.fileSize())
+
+// 	for i := 0; i < int(d.filePopulatedTo); i++ {
+// 		var slotBytes [slotSize]byte
+// 		var readHash, left, right Hash
+
+// 		_, err := d.file.ReadAt(slotBytes[:], int64(i*slotSize))
+// 		if err != nil {
+// 			panic("f")
+// 		}
+
+// 		// Read the file
+// 		copy(readHash[:], slotBytes[0:32])
+// 		copy(left[:], slotBytes[32:64])
+// 		copy(right[:], slotBytes[64:96])
+// 		// midpoint := binary.LittleEndian.Uint64(slotBytes[96:104])
+
+// 		// Compile the node struct
+// 		// node :=
+// 		fmt.Printf("\tindex is %d\n", i)
+// 		fmt.Printf("\tread hash is %x\n", readHash)
+
+// 		f, ok := d.indexMap[readHash.Mini()]
+// 		fmt.Printf("\tindex in indexmap is %d\n", f)
+// 		if ok {
+// 			if int(f) != i {
+// 				panic("")
+// 			}
+// 		}
+// 	}
+// 	fmt.Printf("\t\n")
+// }

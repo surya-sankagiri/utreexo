@@ -34,7 +34,7 @@ type ForestData interface {
 
 // A treenodes with a ram cache. Every entry exists in either the disk or the ram, not both
 type ramCacheTreeNodes struct {
-	disk        diskTreeNodes
+	disk        superDiskTreeNodes
 	ram         *lru.Cache
 	maxRAMElems int
 }
@@ -45,7 +45,7 @@ func newRAMCacheTreeNodes(file *os.File, maxRAMElems int) ramCacheTreeNodes {
 	if err != nil {
 		panic("Error making cache")
 	}
-	return ramCacheTreeNodes{newDiskTreeNodes(file), cache, maxRAMElems}
+	return ramCacheTreeNodes{newSuperDiskTreeNodes(file), cache, maxRAMElems}
 }
 
 // read ignores errors. Probably get an empty hash if it doesn't work
@@ -76,11 +76,11 @@ func (d *ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 		panic("Trying to write something that already exists")
 	}
 
-	_, ok := d.disk.read(hash)
-	if ok {
-		// Already in disk, done
-		panic("Trying to write something that already exists")
-	}
+	// _, ok := d.disk.read(hash)
+	// if ok {
+	// 	// Already in disk, done
+	// 	panic("Trying to write something that already exists")
+	// }
 
 	// Not in ram or disk
 	if d.ram.Len() < d.maxRAMElems {
@@ -157,45 +157,7 @@ func (d *diskTreeNodes) fileSize() int64 {
 	return s.Size() / slotSize
 }
 
-// func (d diskTreeNodes) isValid() {
-// 	fmt.Printf("\tCheckingisvalid\n")
-// 	fmt.Printf("\tSize is %d, file size is %d\n", d.size(), d.fileSize())
-
-// 	for i := 0; i < int(d.filePopulatedTo); i++ {
-// 		var slotBytes [slotSize]byte
-// 		var readHash, left, right Hash
-
-// 		_, err := d.file.ReadAt(slotBytes[:], int64(i*slotSize))
-// 		if err != nil {
-// 			panic("f")
-// 		}
-
-// 		// Read the file
-// 		copy(readHash[:], slotBytes[0:32])
-// 		copy(left[:], slotBytes[32:64])
-// 		copy(right[:], slotBytes[64:96])
-// 		// midpoint := binary.LittleEndian.Uint64(slotBytes[96:104])
-
-// 		// Compile the node struct
-// 		// node :=
-// 		fmt.Printf("\tindex is %d\n", i)
-// 		fmt.Printf("\tread hash is %x\n", readHash)
-
-// 		f, ok := d.indexMap[readHash.Mini()]
-// 		fmt.Printf("\tindex in indexmap is %d\n", f)
-// 		if ok {
-// 			if int(f) != i {
-// 				panic("")
-// 			}
-// 		}
-// 	}
-// 	fmt.Printf("\t\n")
-// }
-
 // ********************************************* forest on disk
-// type diskForestData struct {
-// 	file *os.File
-// }
 
 func (d *diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 
@@ -402,7 +364,7 @@ func (d *diskTreeNodes) diskSize() uint64 {
 func (d *diskTreeNodes) close() {
 	err := d.file.Close()
 	if err != nil {
-		fmt.Printf("diskForestData close error: %s\n", err.Error())
+		fmt.Printf("diskTreeNodes close error: %s\n", err.Error())
 	}
 }
 
@@ -439,14 +401,16 @@ func (d *dbTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	// startSize := d.size()
 
 	var slotBytes [72]byte
+	retrieved := false
 	var left, right Hash
 
 	err := d.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(hash[:])
 		if err != nil {
-			logrus.Error("Failed to retrieve", hash[:6])
-			panic(err)
+			// did not retireve
+			return nil
 		}
+		retrieved = true
 
 		var valCopy []byte
 		err = item.Value(func(val []byte) error {
@@ -472,6 +436,10 @@ func (d *dbTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	})
 	if err != nil {
 		panic(err)
+	}
+
+	if !retrieved {
+		return patriciaNode{}, false
 	}
 
 	// Read the slot into a struct
@@ -598,5 +566,226 @@ func (d *dbTreeNodes) close() {
 	err := d.db.Close()
 	if err != nil {
 		fmt.Printf("diskForestData close error: %s\n", err.Error())
+	}
+}
+
+// A disk backed node store which makes a huge file
+type superDiskTreeNodes struct {
+	file  *os.File
+	size_ uint64
+}
+
+// We make a file big enough to hold all our data
+// There are at most 70 million UTXOs
+// meaning there are 70 million leaves
+// 70 million internal nodes
+// and 70 million leaf location datas if we ever decide to fold that in
+// thats 3 * 70 million
+// we then double again to ensure the space is always half empty.
+const superDiskFileEntries = 70000000 * 3 * 2
+const superDiskFileSize = superDiskFileEntries * slotSize
+
+// This is about 43 GB
+
+// newsuperDiskTreeNodes makes a new file-backed tree nodes container
+func newSuperDiskTreeNodes(file *os.File) superDiskTreeNodes {
+
+	fmt.Println("Making huge file for tree entries")
+	file.Truncate(superDiskFileSize)
+	fmt.Println("Done making huge file for tree entries")
+
+	return superDiskTreeNodes{file, 0}
+}
+
+// We choose a location from the hash
+func hashToIndex(hash Hash) uint64 {
+	return binary.LittleEndian.Uint64(hash[:8]) % superDiskFileEntries
+}
+
+func (d *superDiskTreeNodes) fileSize() int64 {
+
+	return superDiskFileSize
+}
+
+// ********************************************* forest on disk
+
+func (d *superDiskTreeNodes) read(hash Hash) (patriciaNode, bool) {
+
+	// fmt.Printf("\tCalling read\n")
+
+	// startSize := d.size()
+
+	var slotBytes [slotSize]byte
+	var readHash, left, right Hash
+
+	idx := hashToIndex(hash)
+
+	for i := 0; i < 256; i++ {
+		indexToRead := (idx + uint64(i)) % superDiskFileEntries
+		_, err := d.file.ReadAt(slotBytes[:], int64(indexToRead*slotSize))
+		if err != nil {
+			fmt.Printf("\tWARNING!! read %x pos %d %s\n", hash, idx, err.Error())
+		}
+		// Read the file
+		copy(readHash[:], slotBytes[0:32])
+		if readHash != hash {
+			continue
+		}
+		copy(left[:], slotBytes[32:64])
+		copy(right[:], slotBytes[64:96])
+		prefixUint := binary.LittleEndian.Uint64(slotBytes[96:104])
+
+		// Compile the node struct
+		node := patriciaNode{left, right, prefixRange(prefixUint)}
+
+		// d.isValid()
+
+		// if readHash != hash {
+		// 	fmt.Printf("\tindex is %d\n", i)
+		// 	fmt.Printf("\tinput hash is %x\n", hash)
+		// 	fmt.Printf("\tread hash is %x\n", readHash)
+		// 	fmt.Printf("\tcomputed hash is %x\n", node.hash())
+		// 	// fmt.Printf("\tnode midpoint is %d\n", node.midpoint)
+		// 	panic("MiniHash Collision TODO do something different to secure this, this is just a kludge in place of a more sophisticated disk-backed key-value store")
+		// }
+
+		if readHash != node.hash() {
+			panic("Hash of node is wrong")
+		}
+
+		// endSize := d.size()
+
+		// fmt.Printf("\t%d %d\n", startSize, endSize)
+
+		// if endSize-startSize != 0 {
+		// 	panic("")
+		// }
+		return node, true
+
+	}
+
+	panic("Got through loop, didn't find read")
+
+}
+
+// write writes a key-value pair
+func (d *superDiskTreeNodes) write(hash Hash, node patriciaNode) {
+
+	logrus.Trace("\tCalling write\n")
+
+	// _, ok := d.read(hash)
+
+	// if ok {
+	// 	// Key already present,
+	// 	panic("This should not happen, we should never write twice if something is already there")
+	// }
+
+	// if node.hash() != hash {
+	// 	panic("Input node with hash not matching the input hash")
+	// }
+
+	idx := hashToIndex(hash)
+
+	var readHash Hash
+
+	for i := 0; i < 256; i++ {
+		indexToWrite := (idx + uint64(i)) % superDiskFileEntries
+
+		// Read the file to see if its empty
+		_, err := d.file.ReadAt(readHash[:], int64(indexToWrite*slotSize))
+		if err != nil {
+			fmt.Printf("\tWARNING!! read %x pos %d %s\n", hash, idx, err.Error())
+		}
+		if readHash != empty {
+			continue
+		}
+		// Found an empty slot
+
+		_, err = d.file.WriteAt(hash[:], int64(indexToWrite*slotSize))
+		_, err = d.file.WriteAt(node.left[:], int64(indexToWrite*slotSize+32))
+		_, err = d.file.WriteAt(node.right[:], int64(indexToWrite*slotSize+64))
+		prefixBytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(prefixBytes, uint64(node.prefix))
+		_, err = d.file.WriteAt(prefixBytes[:], int64(indexToWrite*slotSize+96))
+
+		if err != nil {
+			fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
+		}
+
+		d.size_++
+
+		return
+
+	}
+	panic("Did not find place to write")
+
+}
+
+func (d *superDiskTreeNodes) delete(hash Hash) {
+
+	logrus.Trace("\tCalling delete\n")
+
+	// _, ok := d.read(hash)
+
+	// if ok {
+	// 	// Key already present,
+	// 	panic("This should not happen, we should never write twice if something is already there")
+	// }
+
+	// if node.hash() != hash {
+	// 	panic("Input node with hash not matching the input hash")
+	// }
+
+	idx := hashToIndex(hash)
+
+	var readHash Hash
+	var emptySlot [slotSize]byte
+
+	for i := 0; i < 256; i++ {
+		indexToDelete := (idx + uint64(i)) % superDiskFileEntries
+
+		// Read the file to see if its empty
+		_, err := d.file.ReadAt(readHash[:], int64(indexToDelete*slotSize))
+		if err != nil {
+			fmt.Printf("\tWARNING!! read %x pos %d %s\n", hash, idx, err.Error())
+		}
+		if readHash != hash {
+			continue
+		}
+		// Found the slot with thing to delete
+
+		_, err = d.file.WriteAt(emptySlot[:], int64(indexToDelete*slotSize))
+
+		if err != nil {
+			fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
+		}
+
+		d.size_--
+
+		return
+
+	}
+
+	panic("Did not find thing to delete")
+
+}
+
+// size gives you the size of the forest
+func (d *superDiskTreeNodes) size() uint64 {
+
+	return d.size_
+
+}
+
+func (d *superDiskTreeNodes) diskSize() uint64 {
+
+	return d.size()
+
+}
+
+func (d *superDiskTreeNodes) close() {
+	err := d.file.Close()
+	if err != nil {
+		fmt.Printf("superDiskTreeNodes close error: %s\n", err.Error())
 	}
 }
