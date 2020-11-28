@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	lru "github.com/hashicorp/golang-lru"
 
@@ -571,7 +572,7 @@ func (d *dbTreeNodes) close() {
 
 // A disk backed node store which makes a huge file
 type superDiskTreeNodes struct {
-	file  *os.File
+	files []*os.File
 	size_ uint64
 }
 
@@ -583,18 +584,31 @@ type superDiskTreeNodes struct {
 // thats 3 * 70 million
 // we then double again to ensure the space is always half empty.
 const superDiskFileEntries = 70000000 * 3 * 2
-const superDiskFileSize = superDiskFileEntries * slotSize
+const superDiskTotalFileSize = superDiskFileEntries * slotSize
+const superDiskFiles = 1000 // Make sure this divides superDiskFileEntries
+const superDiskIndividualFileSize = superDiskTotalFileSize / superDiskFiles
 
 // This is about 43 GB
 
 // newsuperDiskTreeNodes makes a new file-backed tree nodes container
 func newSuperDiskTreeNodes(file *os.File) superDiskTreeNodes {
 
-	fmt.Println("Making huge file for tree entries")
-	file.Truncate(superDiskFileSize)
-	fmt.Println("Done making huge file for tree entries")
+	var files = make([]*os.File, 0)
 
-	return superDiskTreeNodes{file, 0}
+	for i := 0; i < superDiskFiles; i++ {
+		fmt.Println("Making huge file for tree entries: ", i)
+		filename := filepath.Join(filepath.Join(".", "utree/forestdata"), fmt.Sprintf("forestfile%d.dat", i))
+		file, err := os.OpenFile(
+			filename, os.O_CREATE|os.O_RDWR, 0600)
+		if err != nil {
+			panic(err)
+		}
+		file.Truncate(superDiskIndividualFileSize)
+		files = append(files, file)
+		fmt.Println("Done making huge file for tree entries")
+	}
+
+	return superDiskTreeNodes{files, 0}
 }
 
 // We choose a location from the hash
@@ -604,7 +618,7 @@ func hashToIndex(hash Hash) uint64 {
 
 func (d *superDiskTreeNodes) fileSize() int64 {
 
-	return superDiskFileSize
+	return superDiskTotalFileSize
 }
 
 // ********************************************* forest on disk
@@ -621,8 +635,10 @@ func (d *superDiskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	idx := hashToIndex(hash)
 
 	for i := 0; i < 256; i++ {
-		indexToRead := (idx + uint64(i)) % superDiskFileEntries
-		_, err := d.file.ReadAt(slotBytes[:], int64(indexToRead*slotSize))
+		index := (idx + uint64(i)) % superDiskFileEntries
+		fileNo := index % superDiskFiles
+		fileIdx := index / superDiskFiles
+		_, err := d.files[fileNo].ReadAt(slotBytes[:], int64(fileIdx*slotSize))
 		if err != nil {
 			fmt.Printf("\tWARNING!! read %x pos %d %s\n", hash, idx, err.Error())
 		}
@@ -689,10 +705,12 @@ func (d *superDiskTreeNodes) write(hash Hash, node patriciaNode) {
 	var readHash Hash
 
 	for i := 0; i < 256; i++ {
-		indexToWrite := (idx + uint64(i)) % superDiskFileEntries
+		index := (idx + uint64(i)) % superDiskFileEntries
+		fileNo := index % superDiskFiles
+		fileIdx := index / superDiskFiles
 
 		// Read the file to see if its empty
-		_, err := d.file.ReadAt(readHash[:], int64(indexToWrite*slotSize))
+		_, err := d.files[fileNo].ReadAt(readHash[:], int64(fileIdx*slotSize))
 		if err != nil {
 			fmt.Printf("\tWARNING!! read %x pos %d %s\n", hash, idx, err.Error())
 		}
@@ -701,12 +719,12 @@ func (d *superDiskTreeNodes) write(hash Hash, node patriciaNode) {
 		}
 		// Found an empty slot
 
-		_, err = d.file.WriteAt(hash[:], int64(indexToWrite*slotSize))
-		_, err = d.file.WriteAt(node.left[:], int64(indexToWrite*slotSize+32))
-		_, err = d.file.WriteAt(node.right[:], int64(indexToWrite*slotSize+64))
+		_, err = d.files[fileNo].WriteAt(hash[:], int64(fileIdx*slotSize))
+		_, err = d.files[fileNo].WriteAt(node.left[:], int64(fileIdx*slotSize+32))
+		_, err = d.files[fileNo].WriteAt(node.right[:], int64(fileIdx*slotSize+64))
 		prefixBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(prefixBytes, uint64(node.prefix))
-		_, err = d.file.WriteAt(prefixBytes[:], int64(indexToWrite*slotSize+96))
+		_, err = d.files[fileNo].WriteAt(prefixBytes[:], int64(fileIdx*slotSize+96))
 
 		if err != nil {
 			fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
@@ -742,10 +760,12 @@ func (d *superDiskTreeNodes) delete(hash Hash) {
 	var emptySlot [slotSize]byte
 
 	for i := 0; i < 256; i++ {
-		indexToDelete := (idx + uint64(i)) % superDiskFileEntries
+		index := (idx + uint64(i)) % superDiskFileEntries
+		fileNo := index % superDiskFiles
+		fileIdx := index / superDiskFiles
 
 		// Read the file to see if its empty
-		_, err := d.file.ReadAt(readHash[:], int64(indexToDelete*slotSize))
+		_, err := d.files[fileNo].ReadAt(readHash[:], int64(fileIdx*slotSize))
 		if err != nil {
 			fmt.Printf("\tWARNING!! read %x pos %d %s\n", hash, idx, err.Error())
 		}
@@ -754,7 +774,7 @@ func (d *superDiskTreeNodes) delete(hash Hash) {
 		}
 		// Found the slot with thing to delete
 
-		_, err = d.file.WriteAt(emptySlot[:], int64(indexToDelete*slotSize))
+		_, err = d.files[fileNo].WriteAt(emptySlot[:], int64(fileIdx*slotSize))
 
 		if err != nil {
 			fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
@@ -784,8 +804,12 @@ func (d *superDiskTreeNodes) diskSize() uint64 {
 }
 
 func (d *superDiskTreeNodes) close() {
-	err := d.file.Close()
-	if err != nil {
-		fmt.Printf("superDiskTreeNodes close error: %s\n", err.Error())
+
+	for _, file := range d.files {
+		err := file.Close()
+		if err != nil {
+			fmt.Printf("superDiskTreeNodes close error: %s\n", err.Error())
+		}
 	}
+
 }

@@ -842,7 +842,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		} else {
 			// for on-disk with cache
 			// 2_000_000 lems in ram seems good, not really enough to cause ram issues, but enough to speed things up
-			treeNodes := newRAMCacheTreeNodes(forestFile, 2000000)
+			treeNodes := newRAMCacheTreeNodes(forestFile, 200)
 			// for on disk
 			// treeNodes := newSuperDiskTreeNodes(forestFile)
 			// for bitcask/diskv
