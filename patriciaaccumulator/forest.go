@@ -460,12 +460,14 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 // ProveBatch Returns a BatchProof proving a list of hashes against a forest
 func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
 	targets := make([]uint64, len(hashes))
-	var ok bool
+
 	for i, hash := range hashes {
-		targets[i], ok = f.lookup.leafLocations[hash.Mini()]
+		// targets[i], ok = f.lookup.leafLocations[hash.Mini()]
+		dummyNode, ok := f.lookup.treeNodes.read(hash)
 		if !ok {
 			panic("ProveBatch: hash of leaf not found in leafLocations")
 		}
+		targets[i] = dummyNode.prefix.value()
 	}
 	logrus.Debug("Calling RetrieveBatchProof")
 	return f.lookup.RetrieveBatchProof(targets), nil
@@ -514,7 +516,8 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	// Add the new leaf node
 	newLeafNode := newLeafPatriciaNode(toAdd, location)
 	t.treeNodes.write(newLeafNode.hash(), newLeafNode)
-	t.leafLocations[toAdd.Mini()] = location
+	// t.leafLocations[toAdd.Mini()] = location
+	t.treeNodes.write(toAdd, patriciaNode{empty, empty, singletonRange(location)})
 
 	logrus.Debug("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], t.treeNodes.size(), "nodes preexisting")
 
@@ -643,7 +646,9 @@ func (t *patriciaLookup) remove(location uint64) {
 
 	// node is now the leaf node for the deleted entry
 	// delete the hash from the leaf location map
-	loc, ok := t.leafLocations[node.left.Mini()]
+	// loc, ok := t.leafLocations[node.left.Mini()]
+	dummyNode, ok := t.treeNodes.read(node.left)
+	loc := dummyNode.prefix.value()
 
 	if !ok {
 		panic("Didn't find location")
@@ -651,7 +656,8 @@ func (t *patriciaLookup) remove(location uint64) {
 	if loc != node.prefix.value() {
 		panic("Location does not match")
 	}
-	delete(t.leafLocations, node.left.Mini())
+	// delete(t.leafLocations, node.left.Mini())
+	t.treeNodes.delete(node.left)
 
 	// Check that the leaf node we found has the right location
 	if node.prefix.value() != location {
@@ -737,7 +743,8 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 		if locations[0] != node.prefix.value() {
 			panic("Wrong leaf found in remove subtree")
 		}
-		delete(t.leafLocations, node.left.Mini())
+		// delete(t.leafLocations, node.left.Mini())
+		t.treeNodes.delete(node.left)
 		return empty, true, nil
 	}
 
@@ -842,7 +849,7 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		} else {
 			// for on-disk with cache
 			// 2_000_000 lems in ram seems good, not really enough to cause ram issues, but enough to speed things up
-			treeNodes := newRAMCacheTreeNodes(forestFile, 200)
+			treeNodes := newRAMCacheTreeNodes(forestFile, 2000000)
 			// for on disk
 			// treeNodes := newSuperDiskTreeNodes(forestFile)
 			// for bitcask/diskv
@@ -1068,7 +1075,8 @@ func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint
 		siblingNode := newLeafPatriciaNode(outsideNode[0], startLocation+i)
 		siblingNodeHash := siblingNode.hash()
 		t.treeNodes.write(siblingNodeHash, siblingNode)
-		t.leafLocations[outsideNode[0].Mini()] = startLocation + i
+		// t.leafLocations[outsideNode[0].Mini()] = startLocation + i
+		t.treeNodes.write(outsideNode[0], patriciaNode{empty, empty, singletonRange(startLocation + i)})
 		combinedNode := newPatriciaNode(newNode, siblingNode)
 
 		// t.treeNodes.write(combinedNodeHash, combinedNode)
@@ -1115,7 +1123,8 @@ func (f *Forest) addv2(adds []Leaf) error {
 		rootNode := newLeafPatriciaNode(addHashes[0], 0)
 		newHash := rootNode.hash()
 		f.lookup.treeNodes.write(newHash, rootNode)
-		f.lookup.leafLocations[addHashes[0].Mini()] = 0
+		// f.lookup.leafLocations[addHashes[0].Mini()] = 0
+		f.lookup.treeNodes.write(addHashes[0], patriciaNode{empty, empty, singletonRange(0)})
 		f.lookup.stateRoot = newHash
 	} else {
 		rootNode, ok := f.lookup.treeNodes.read(f.lookup.stateRoot)

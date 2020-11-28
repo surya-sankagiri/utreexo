@@ -665,9 +665,9 @@ func (d *superDiskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 		// 	panic("MiniHash Collision TODO do something different to secure this, this is just a kludge in place of a more sophisticated disk-backed key-value store")
 		// }
 
-		if readHash != node.hash() {
-			panic("Hash of node is wrong")
-		}
+		// if readHash != node.hash() {
+		// 	panic("Hash of node is wrong")
+		// }
 
 		// endSize := d.size()
 
