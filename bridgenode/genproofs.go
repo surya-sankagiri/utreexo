@@ -202,8 +202,8 @@ func BuildProofs(
 			// logrus.Println("Time for flaked:", t4.Sub(t3))
 			logrus.Println("Time for modifying forest:", t.Sub(t2))
 
-			logrus.Println("Disk Slots Used:", forest.DiskSlotsUsed())
-			logrus.Println("Number of Leaves", forest.LeafLocationSize())
+			// logrus.Println("Disk Slots Used:", forest.DiskSlotsUsed())
+			// logrus.Println("Number of Leaves", forest.LeafLocationSize())
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
 			logrus.Println("Alloc:", m.Alloc,
@@ -582,7 +582,7 @@ func stopBuildProofs(
 	// Sometimes there are bugs that make the program run forever.
 	// Utreexo binary should never take more than 10 seconds to exit
 	go func() {
-		time.Sleep(60 * time.Second)
+		time.Sleep(10 * time.Second)
 		fmt.Println("Program timed out. Force quitting. Data likely corrupted")
 		os.Exit(1)
 	}()

@@ -16,7 +16,8 @@ import (
 )
 
 // Size of a hash and a patricia node 32 + 2 * 32 + 8
-const slotSize = 104
+// for new version, this is now just a node
+const slotSize = 2*32 + 8
 
 // ForestData is the thing that holds all the hashes in the forest.  Could
 // be in a file, or in ram, or maybe something else.
@@ -183,8 +184,10 @@ func (d *diskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	// Read the file
 	copy(readHash[:], slotBytes[0:32])
 	copy(left[:], slotBytes[32:64])
-	copy(right[:], slotBytes[64:96])
-	prefixUint := binary.LittleEndian.Uint64(slotBytes[96:104])
+	// copy(right[:], slotBytes[64:96])
+	// FIXME
+	prefixUint := binary.LittleEndian.Uint64(slotBytes[64:72])
+	panic("")
 
 	// Compile the node struct
 	node := patriciaNode{left, right, prefixRange(prefixUint)}
@@ -585,7 +588,7 @@ type superDiskTreeNodes struct {
 // we then double again to ensure the space is always half empty.
 const superDiskFileEntries = 70000000 * 3 * 2
 const superDiskTotalFileSize = superDiskFileEntries * slotSize
-const superDiskFiles = 1000 // Make sure this divides superDiskFileEntries
+const superDiskFiles = 200 // Make sure this divides superDiskFileEntries
 const superDiskIndividualFileSize = superDiskTotalFileSize / superDiskFiles
 
 // This is about 43 GB
@@ -630,7 +633,7 @@ func (d *superDiskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	// startSize := d.size()
 
 	var slotBytes [slotSize]byte
-	var readHash, left, right Hash
+	var left, right Hash
 
 	idx := hashToIndex(hash)
 
@@ -643,16 +646,26 @@ func (d *superDiskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 			fmt.Printf("\tWARNING!! read %x pos %d %s\n", hash, idx, err.Error())
 		}
 		// Read the file
-		copy(readHash[:], slotBytes[0:32])
-		if readHash != hash {
-			continue
-		}
-		copy(left[:], slotBytes[32:64])
-		copy(right[:], slotBytes[64:96])
-		prefixUint := binary.LittleEndian.Uint64(slotBytes[96:104])
+		// copy(readHash[:], slotBytes[0:32])
+
+		copy(left[:], slotBytes[0:32])
+		copy(right[:], slotBytes[32:64])
+		prefixUint := binary.LittleEndian.Uint64(slotBytes[64:72])
 
 		// Compile the node struct
 		node := patriciaNode{left, right, prefixRange(prefixUint)}
+
+		if left != empty && right == empty && prefixRange(prefixUint).isSingleton() && prefixUint != 0 {
+			// we read a leaf entry
+			if left != hash {
+				continue
+			}
+			return node, true
+		}
+
+		if node.hash() != hash {
+			continue
+		}
 
 		// d.isValid()
 
@@ -719,12 +732,12 @@ func (d *superDiskTreeNodes) write(hash Hash, node patriciaNode) {
 		}
 		// Found an empty slot
 
-		_, err = d.files[fileNo].WriteAt(hash[:], int64(fileIdx*slotSize))
-		_, err = d.files[fileNo].WriteAt(node.left[:], int64(fileIdx*slotSize+32))
-		_, err = d.files[fileNo].WriteAt(node.right[:], int64(fileIdx*slotSize+64))
+		// _, err = d.files[fileNo].WriteAt(hash[:], int64(fileIdx*slotSize))
+		_, err = d.files[fileNo].WriteAt(node.left[:], int64(fileIdx*slotSize))
+		_, err = d.files[fileNo].WriteAt(node.right[:], int64(fileIdx*slotSize+32))
 		prefixBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(prefixBytes, uint64(node.prefix))
-		_, err = d.files[fileNo].WriteAt(prefixBytes[:], int64(fileIdx*slotSize+96))
+		_, err = d.files[fileNo].WriteAt(prefixBytes[:], int64(fileIdx*slotSize+64))
 
 		if err != nil {
 			fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
@@ -756,7 +769,8 @@ func (d *superDiskTreeNodes) delete(hash Hash) {
 
 	idx := hashToIndex(hash)
 
-	var readHash Hash
+	var readSlot [slotSize]byte
+	var left, right Hash
 	var emptySlot [slotSize]byte
 
 	for i := 0; i < 256; i++ {
@@ -765,24 +779,44 @@ func (d *superDiskTreeNodes) delete(hash Hash) {
 		fileIdx := index / superDiskFiles
 
 		// Read the file to see if its empty
-		_, err := d.files[fileNo].ReadAt(readHash[:], int64(fileIdx*slotSize))
+		_, err := d.files[fileNo].ReadAt(readSlot[:], int64(fileIdx*slotSize))
 		if err != nil {
 			fmt.Printf("\tWARNING!! read %x pos %d %s\n", hash, idx, err.Error())
 		}
-		if readHash != hash {
-			continue
+
+		copy(left[:], readSlot[0:32])
+		copy(right[:], readSlot[32:64])
+		prefixUint := binary.LittleEndian.Uint64(readSlot[64:72])
+
+		// Compile the node struct
+		node := patriciaNode{left, right, prefixRange(prefixUint)}
+
+		if left == hash && right == empty {
+			// Found the slot with thing to delete - it's a leaf location slot
+
+			_, err = d.files[fileNo].WriteAt(emptySlot[:], int64(fileIdx*slotSize))
+
+			if err != nil {
+				fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
+			}
+
+			d.size_--
+
+			return
 		}
-		// Found the slot with thing to delete
+		if node.hash() == hash {
+			// Found the slot with thing to delete - it's a node
 
-		_, err = d.files[fileNo].WriteAt(emptySlot[:], int64(fileIdx*slotSize))
+			_, err = d.files[fileNo].WriteAt(emptySlot[:], int64(fileIdx*slotSize))
 
-		if err != nil {
-			fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
+			if err != nil {
+				fmt.Printf("\tWARNING!! write pos %s\n", err.Error())
+			}
+
+			d.size_--
+
+			return
 		}
-
-		d.size_--
-
-		return
 
 	}
 

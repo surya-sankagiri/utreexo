@@ -517,7 +517,7 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 	newLeafNode := newLeafPatriciaNode(toAdd, location)
 	t.treeNodes.write(newLeafNode.hash(), newLeafNode)
 	// t.leafLocations[toAdd.Mini()] = location
-	t.treeNodes.write(toAdd, patriciaNode{empty, empty, singletonRange(location)})
+	t.treeNodes.write(toAdd, patriciaNode{toAdd, empty, singletonRange(location)})
 
 	logrus.Debug("Adding", toAdd[:6], "at", location, "on root", t.stateRoot[:6], t.treeNodes.size(), "nodes preexisting")
 
@@ -849,7 +849,8 @@ func NewForest(forestFile *os.File, cached bool) *Forest {
 		} else {
 			// for on-disk with cache
 			// 2_000_000 lems in ram seems good, not really enough to cause ram issues, but enough to speed things up
-			treeNodes := newRAMCacheTreeNodes(forestFile, 2000000)
+			// With 2_000_000 it seems to only use 3 gigs at most, so 10million should be safe
+			treeNodes := newRAMCacheTreeNodes(forestFile, 10000000)
 			// for on disk
 			// treeNodes := newSuperDiskTreeNodes(forestFile)
 			// for bitcask/diskv
@@ -1076,7 +1077,7 @@ func (t *patriciaLookup) recursiveAddRight(node patriciaNode, startLocation uint
 		siblingNodeHash := siblingNode.hash()
 		t.treeNodes.write(siblingNodeHash, siblingNode)
 		// t.leafLocations[outsideNode[0].Mini()] = startLocation + i
-		t.treeNodes.write(outsideNode[0], patriciaNode{empty, empty, singletonRange(startLocation + i)})
+		t.treeNodes.write(outsideNode[0], patriciaNode{outsideNode[0], empty, singletonRange(startLocation + i)})
 		combinedNode := newPatriciaNode(newNode, siblingNode)
 
 		// t.treeNodes.write(combinedNodeHash, combinedNode)
@@ -1124,7 +1125,7 @@ func (f *Forest) addv2(adds []Leaf) error {
 		newHash := rootNode.hash()
 		f.lookup.treeNodes.write(newHash, rootNode)
 		// f.lookup.leafLocations[addHashes[0].Mini()] = 0
-		f.lookup.treeNodes.write(addHashes[0], patriciaNode{empty, empty, singletonRange(0)})
+		f.lookup.treeNodes.write(addHashes[0], patriciaNode{addHashes[0], empty, singletonRange(0)})
 		f.lookup.stateRoot = newHash
 	} else {
 		rootNode, ok := f.lookup.treeNodes.read(f.lookup.stateRoot)
