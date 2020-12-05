@@ -598,8 +598,9 @@ func newSuperDiskTreeNodes(file *os.File) superDiskTreeNodes {
 
 	var files = make([]*os.File, 0)
 
+	fmt.Println("Making huge files for tree entries: ", superDiskFiles)
+
 	for i := 0; i < superDiskFiles; i++ {
-		fmt.Println("Making huge file for tree entries: ", i)
 		filename := filepath.Join(filepath.Join(".", "utree/forestdata"), fmt.Sprintf("forestfile%d.dat", i))
 		file, err := os.OpenFile(
 			filename, os.O_CREATE|os.O_RDWR, 0600)
@@ -608,8 +609,8 @@ func newSuperDiskTreeNodes(file *os.File) superDiskTreeNodes {
 		}
 		file.Truncate(superDiskIndividualFileSize)
 		files = append(files, file)
-		fmt.Println("Done making huge file for tree entries")
 	}
+	fmt.Println("Done making huge file for tree entries")
 
 	return superDiskTreeNodes{files, 0}
 }
