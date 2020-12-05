@@ -588,7 +588,7 @@ type superDiskTreeNodes struct {
 // we then double again to ensure the space is always half empty.
 const superDiskFileEntries = 70000000 * 3 * 2
 const superDiskTotalFileSize = superDiskFileEntries * slotSize
-const superDiskFiles = 200 // Make sure this divides superDiskFileEntries
+const superDiskFiles = 1000 // Make sure this divides superDiskFileEntries
 const superDiskIndividualFileSize = superDiskTotalFileSize / superDiskFiles
 
 // This is about 43 GB
