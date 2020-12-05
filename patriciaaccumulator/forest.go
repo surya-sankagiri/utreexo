@@ -1173,7 +1173,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 	numDels, numAdds := len(dels), len(adds)
 	// delta := int64(numAdds - numDels) // watch 32/64 bit
 
-	logrus.Debugf("Modify: starting with %d leaves, deleting %d, adding %d\n", f.numLeaves, numDels, numAdds)
+	logrus.Printf("Modify: starting with %d leaves, deleting %d, adding %d, max leaf %d\n", f.numLeaves, numDels, numAdds, f.maxLeaf)
 
 	// Changing this
 	// if int64(f.numLeaves)+delta < 0 {
@@ -1196,17 +1196,7 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 		}
 	}
 
-	// fmt.Println("empty slots", len(f.lookup.treeNodes.emptySlots))
-	// // remap to expand the forest if needed
-	// for int64(f.numLeaves)+delta > int64(1<<f.rows) {
-	// 	// fmt.Printf("current cap %d need %d\n",
-	// 	// 1<<f.rows, f.numLeaves+delta)
-	// 	err := f.reMap(f.rows + 1)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// }
-
+	t0 := time.Now()
 	// v3 should do the exact same thing as v2 now
 	// fmt.Printf("Beginning Deletes\n")
 	err := f.removev5(dels)
@@ -1214,6 +1204,8 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 		return nil, err
 	}
 	// f.cleanup(uint64(numDels))
+
+	t1 := time.Now()
 
 	// save the leaves past the edge for undo
 	// dels hasn't been mangled by remove up above, right?
@@ -1228,12 +1220,16 @@ func (f *Forest) Modify(adds []Leaf, dels []uint64) (*undoBlock, error) {
 		return nil, err
 	}
 
+	t2 := time.Now()
+
 	// fmt.Printf("done modifying block, added %d\n", len(adds))
 	// fmt.Printf("post add %s\n", f.ToString())
 	// for m, p := range f.positionMap {
 	// 	fmt.Printf("%x @%d\t", m[:4], p)
 	// }
 	// fmt.Printf("\n")
+	logrus.Println("Modified - remove time: ", t1.Sub(t0))
+	logrus.Println("Modified - add time:", t2.Sub(t1))
 
 	return nil, err
 }

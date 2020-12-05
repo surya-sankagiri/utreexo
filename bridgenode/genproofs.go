@@ -112,7 +112,7 @@ func BuildProofs(
 	for ; height != knownTipHeight && !stop; height++ {
 
 		logrus.Debug("Beginning Proof Loop")
-		t0 := time.Now()
+
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
 
@@ -128,6 +128,7 @@ func BuildProofs(
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
 		logrus.Trace("Calling genUData")
+		t0 := time.Now()
 		ud, err := genUData(delLeaves, forest, bnr.Height)
 		if err != nil {
 			return err
