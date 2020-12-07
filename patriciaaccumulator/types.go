@@ -136,12 +136,14 @@ func (s *SimChain) NextBlock(numAdds uint32) ([]Leaf, []int32, []Hash) {
 	// make a bunch of unique adds & make an expiry time and add em to
 	// the TTL map
 	for j, _ := range adds {
-		adds[j].Hash[0] = uint8(s.leafCounter)
-		adds[j].Hash[1] = uint8(s.leafCounter >> 8)
-		adds[j].Hash[2] = uint8(s.leafCounter >> 16)
-		adds[j].Hash[3] = 0xff
-		adds[j].Hash[4] = uint8(s.leafCounter >> 24)
-		adds[j].Hash[5] = uint8(s.leafCounter >> 32)
+		// adds[j].Hash[0] = uint8(s.leafCounter)
+		// adds[j].Hash[1] = uint8(s.leafCounter >> 8)
+		// adds[j].Hash[2] = uint8(s.leafCounter >> 16)
+		// adds[j].Hash[3] = 0xff
+		// adds[j].Hash[4] = uint8(s.leafCounter >> 24)
+		// adds[j].Hash[5] = uint8(s.leafCounter >> 32)
+		dummyNode := patriciaNode{empty, empty, singletonRange(uint64(s.leafCounter))}
+		adds[j].Hash = dummyNode.hash()
 
 		durations[j] = int32(rand.Uint32() & s.durationMask)
 

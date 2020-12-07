@@ -92,8 +92,8 @@ func (r prefixRange) right() prefixRange {
 	return prefixRange(r.max() + r.midpoint())
 }
 
-// returns the parent prefixRange of r (the second half of r)
-func (r prefixRange) parent() prefixRange {
+// returns the up prefixRange of r (of which r is either left or right)
+func (r prefixRange) up() prefixRange {
 
 	// Determine which of min and max has higher 2-arity
 	if bits.TrailingZeros64(r.min()) < bits.TrailingZeros64(r.max()) {
@@ -107,7 +107,7 @@ func (r prefixRange) parent() prefixRange {
 // The smallest prefix range containing the two disjoint ranges
 func commonPrefix(child1, child2 prefixRange) prefixRange {
 	if child1.subset(child2) || child2.subset(child1) {
-		panic("Cannot combine overlapping ranges")
+		panic(fmt.Sprintf("Cannot combine overlapping ranges %s %s", child1.String(), child2.String()))
 	}
 
 	var min, max uint64

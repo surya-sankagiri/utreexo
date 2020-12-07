@@ -36,9 +36,35 @@ type ForestData interface {
 
 // A treenodes with a ram cache. Every entry exists in either the disk or the ram, not both
 type ramCacheTreeNodes struct {
-	disk        superDiskTreeNodes
-	ram         *lru.Cache
-	maxRAMElems int
+	disk              superDiskTreeNodes
+	ram               *lru.Cache
+	maxRAMElems       int
+	readCacheHits     int
+	readCacheMisses   int
+	writeCacheHits    int
+	writeCacheMisses  int
+	deleteCacheHits   int
+	deleteCacheMisses int
+}
+
+func (d *ramCacheTreeNodes) clearHitTracker() {
+	d.readCacheHits = 0
+	d.readCacheMisses = 0
+	d.writeCacheHits = 0
+	d.writeCacheMisses = 0
+	d.deleteCacheHits = 0
+	d.deleteCacheMisses = 0
+}
+
+func (d *ramCacheTreeNodes) printHitTracker() {
+	fmt.Println("read hit/miss", d.readCacheHits,
+		d.readCacheMisses,
+		"write hit/miss",
+		d.writeCacheHits,
+		d.writeCacheMisses,
+		"delete hit/miss",
+		d.deleteCacheHits,
+		d.deleteCacheMisses)
 }
 
 // newRamCacheTreeNodes returns a new treenodes container with a ram cache
@@ -47,7 +73,7 @@ func newRAMCacheTreeNodes(file *os.File, maxRAMElems int) ramCacheTreeNodes {
 	if err != nil {
 		panic("Error making cache")
 	}
-	return ramCacheTreeNodes{newSuperDiskTreeNodes(file), cache, maxRAMElems}
+	return ramCacheTreeNodes{newSuperDiskTreeNodes(file), cache, maxRAMElems, 0, 0, 0, 0, 0, 0}
 }
 
 // read ignores errors. Probably get an empty hash if it doesn't work
@@ -58,9 +84,11 @@ func (d *ramCacheTreeNodes) read(hash Hash) (patriciaNode, bool) {
 	val, ok := d.ram.Get(hash)
 	if ok {
 		// In memory
+		d.readCacheHits++
 		return val.(patriciaNode), ok
 	}
 	// If not in memory, read disk
+	d.readCacheMisses++
 	logrus.Trace(fmt.Sprintln("If not in memory, read disk"))
 	return d.disk.read(hash)
 
@@ -88,6 +116,7 @@ func (d *ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 	if d.ram.Len() < d.maxRAMElems {
 		// Enough space, just write to ram
 		logrus.Trace("Space in RAM, writing to RAM")
+		d.writeCacheHits++
 		d.ram.Add(hash, node)
 	} else {
 		logrus.Trace("No Space in RAM")
@@ -96,6 +125,7 @@ func (d *ramCacheTreeNodes) write(hash Hash, node patriciaNode) {
 		if !ok {
 			panic("Should not be empty")
 		}
+		d.writeCacheMisses++
 		d.disk.write(oldHash.(Hash), oldNode.(patriciaNode))
 		d.ram.Add(hash, node)
 
@@ -112,7 +142,10 @@ func (d *ramCacheTreeNodes) delete(hash Hash) {
 
 	if !present {
 		// Delete from disk
+		d.deleteCacheMisses++
 		d.disk.delete(hash)
+	} else {
+		d.deleteCacheHits++
 	}
 }
 
@@ -598,10 +631,15 @@ func newSuperDiskTreeNodes(file *os.File) superDiskTreeNodes {
 
 	var files = make([]*os.File, 0)
 
+	fmt.Println(os.Getwd())
 	fmt.Println("Making huge files for tree entries: ", superDiskFiles)
 
 	for i := 0; i < superDiskFiles; i++ {
 		filename := filepath.Join(filepath.Join(".", "utree/forestdata"), fmt.Sprintf("forestfile%d.dat", i))
+		err := os.Remove(filename)
+		if err != nil {
+			// ignore
+		}
 		file, err := os.OpenFile(
 			filename, os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
@@ -629,7 +667,7 @@ func (d *superDiskTreeNodes) fileSize() int64 {
 
 func (d *superDiskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 
-	// fmt.Printf("\tCalling read\n")
+	logrus.Trace("Disk Level read ", hash[:6])
 
 	// startSize := d.size()
 
@@ -656,6 +694,8 @@ func (d *superDiskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 		// Compile the node struct
 		node := patriciaNode{left, right, prefixRange(prefixUint)}
 
+		// fmt.Println(node)
+
 		if left != empty && right == empty && prefixRange(prefixUint).isSingleton() && prefixUint != 0 {
 			// we read a leaf entry
 			if left != hash {
@@ -668,40 +708,18 @@ func (d *superDiskTreeNodes) read(hash Hash) (patriciaNode, bool) {
 			continue
 		}
 
-		// d.isValid()
-
-		// if readHash != hash {
-		// 	fmt.Printf("\tindex is %d\n", i)
-		// 	fmt.Printf("\tinput hash is %x\n", hash)
-		// 	fmt.Printf("\tread hash is %x\n", readHash)
-		// 	fmt.Printf("\tcomputed hash is %x\n", node.hash())
-		// 	// fmt.Printf("\tnode midpoint is %d\n", node.midpoint)
-		// 	panic("MiniHash Collision TODO do something different to secure this, this is just a kludge in place of a more sophisticated disk-backed key-value store")
-		// }
-
-		// if readHash != node.hash() {
-		// 	panic("Hash of node is wrong")
-		// }
-
-		// endSize := d.size()
-
-		// fmt.Printf("\t%d %d\n", startSize, endSize)
-
-		// if endSize-startSize != 0 {
-		// 	panic("")
-		// }
 		return node, true
 
 	}
 
-	panic("Got through loop, didn't find read")
+	panic(fmt.Sprintf("Got through loop, didn't find read: hash %d", hash[:6]))
 
 }
 
 // write writes a key-value pair
 func (d *superDiskTreeNodes) write(hash Hash, node patriciaNode) {
 
-	logrus.Trace("\tCalling write\n")
+	logrus.Trace("Disk Level write ", hash[:6])
 
 	// _, ok := d.read(hash)
 
@@ -729,6 +747,7 @@ func (d *superDiskTreeNodes) write(hash Hash, node patriciaNode) {
 			fmt.Printf("\tWARNING!! read %x pos %d %s\n", hash, idx, err.Error())
 		}
 		if readHash != empty {
+			// fmt.Println(readHash)
 			continue
 		}
 		// Found an empty slot

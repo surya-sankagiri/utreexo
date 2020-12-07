@@ -2,15 +2,30 @@ package patriciaaccumulator
 
 import (
 	"fmt"
+	"os"
 	"testing"
 )
 
 func TestDeleteReverseOrder(t *testing.T) {
-	f := NewForest(nil, false)
+
+	err := os.Chdir("/Users/boltonbailey/Library/Application Support/Bitcoin/blocks")
+	if err != nil {
+		panic(err)
+	}
+
+	file, err := os.OpenFile("foo.tmp", os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		panic(err)
+	}
+
+	f := NewForest(file, false)
 
 	leaf1 := Leaf{Hash: Hash{1}}
 	leaf2 := Leaf{Hash: Hash{2}}
-	_, err := f.Modify([]Leaf{leaf1, leaf2}, nil)
+
+	_, err = f.Modify([]Leaf{leaf1}, nil)
+
+	_, err = f.Modify([]Leaf{leaf2}, nil)
 	if err != nil {
 		t.Fail()
 	}
@@ -23,16 +38,40 @@ func TestDeleteReverseOrder(t *testing.T) {
 
 func TestForestAddDel(t *testing.T) {
 
-	numAdds := uint32(10)
+	// Setup accumulator
 
-	f := NewForest(nil, false)
+	err := os.Chdir("/Users/boltonbailey/Library/Application Support/Bitcoin/blocks")
+	if err != nil {
+		panic(err)
+	}
+
+	f := NewForestParams(10000)
+
+	leaf1 := Leaf{Hash: Hash{1}}
+
+	_, err = f.Modify([]Leaf{leaf1}, nil)
+
+	/// Setup simulated chain
+
+	numAdds := uint32(10000)
 
 	sc := NewSimChain(0x07)
 	sc.lookahead = 400
 
 	for b := 0; b < 1000; b++ {
 
+		// fmt.Println(f.lookup.String())
+
 		adds, _, delHashes := sc.NextBlock(numAdds)
+
+		// fmt.Println("adds")
+		// for _, add := range adds {
+		// 	fmt.Println(add)
+		// }
+		// fmt.Println("delHashes")
+		// for _, delHash := range delHashes {
+		// 	fmt.Println(delHash[:6])
+		// }
 
 		bp, err := f.ProveBatch(delHashes)
 		if err != nil {
@@ -44,7 +83,7 @@ func TestForestAddDel(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		fmt.Printf("nl %d %s", f.numLeaves, f.ToString())
+		t.Logf("nl %d", f.numLeaves)
 	}
 }
 
