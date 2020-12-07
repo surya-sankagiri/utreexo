@@ -350,7 +350,7 @@ func (f *Forest) addv2(adds []Leaf) error {
 		}
 		initialStateRoot := f.lookup.stateRoot
 
-		newStateRoot, err := f.lookup.recursiveAddRight(f.lookup.stateRoot, location, addHashes)
+		newStateRoot, err := f.lookup.recursiveAddRight(f.lookup.stateRoot, location, addHashes, nil)
 		if err != nil {
 			panic("")
 		}

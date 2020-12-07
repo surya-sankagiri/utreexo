@@ -811,7 +811,8 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 // Adds hashes to the tree under node hash with starting location
 // Returns the new hash of the root to replace the at
 // TODO pass node in when possible to avoid accessing treeNodes
-func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds []Hash) (Hash, error) {
+// Optionally takes a node which is the hash's node, so you don't have to read it
+func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds []Hash, hintNode *patriciaNode) (Hash, error) {
 
 	logrus.Debug("Starting recursive add")
 
@@ -820,10 +821,20 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 		return hash, nil
 	}
 
-	// Get the node we are adding to
-	node, ok := t.treeNodes.read(hash)
-	if !ok {
-		panic("could not find node")
+	var node patriciaNode
+
+	if hintNode != nil {
+		node = *hintNode
+		if node.hash() != hash {
+			panic("wrong node passed")
+		}
+	} else {
+		// Get the node we are adding to
+		readNode, ok := t.treeNodes.read(hash)
+		if !ok {
+			panic("could not find node")
+		}
+		node = readNode
 	}
 
 	// Get the overarching prefix of node and all the adds after everything is done
@@ -855,7 +866,8 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 			i := overarchingPrefix.midpoint() - startLocation
 			leftAdds := adds[:i]
 			rightAdds := adds[i:]
-			newLeftHash, err := t.recursiveAddRight(hash, startLocation, leftAdds)
+			// newLeftHash, err := t.recursiveAddRight(hash, startLocation, leftAdds, &node)
+			newLeftHash, err := t.recursiveAddRight(hash, startLocation, leftAdds, nil)
 			if err != nil {
 				panic(err)
 			}
@@ -890,7 +902,7 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 		t.treeNodes.delete(hash)
 
 		// The right hash is what changes
-		newRightHash, err := t.recursiveAddRight(node.right, startLocation, adds)
+		newRightHash, err := t.recursiveAddRight(node.right, startLocation, adds, nil)
 		if err != nil {
 			panic(err)
 		}
