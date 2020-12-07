@@ -359,7 +359,7 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 // ProveBatch Returns a BatchProof proving a list of hashes against a forest
 func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
 
-	fmt.Println("Prove batch")
+	logrus.Trace("Prove batch")
 	f.lookup.treeNodes.clearHitTracker()
 
 	targets := make([]uint64, len(hashes))

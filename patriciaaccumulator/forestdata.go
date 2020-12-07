@@ -57,7 +57,7 @@ func (d *ramCacheTreeNodes) clearHitTracker() {
 }
 
 func (d *ramCacheTreeNodes) printHitTracker() {
-	fmt.Println("read hit/miss", d.readCacheHits,
+	logrus.Println("read hit/miss", d.readCacheHits,
 		d.readCacheMisses,
 		"write hit/miss",
 		d.writeCacheHits,
