@@ -7,17 +7,24 @@ import (
 	"sort"
 )
 
-// OLD CODE:
-// // BatchProof :
-// type BatchProof struct {
-// 	Targets []uint64
-// 	Proof   []Hash
-// 	// list of leaf locations to delete, along with a bunch of hashes that give the proof.
-// 	// the position of the hashes is implied / computable from the leaf positions
-// }
+// Proofs of batches of elements in this code base are encoded using one of four data structures.
+// These four datastructures represent four levels of compression or serialization.
+// Each level has functions/methods that transform to/from the one below it.
+//
+// The data structures one can use to represent a batch proof are as follows:
+//
+// 1. []PatriciaProof: A patricia proof represents a branch to a single leaf in the patricia tree, proving a single element. A list of these branches makes up a proof of a batch
+// 2. LongBatchProof: This combines a collection of branches, and removes redundancies in hashes that occur twice in the list of PatriciaProofs
+//
+//
+//
+// 3. BatchProof : This compresses a LongBatchProof by replacing the prefixes by their widths.
+//                           |                       ^
+//     BatchProof.ToBytes()  |                       | FromBytesBatchProof()
+//                           v                       |
+// 4. []bytes : The BatchProof can finally be serialized as a slice of bytes to be passed to the networking code.
 
-// TODO it is actually possible to avoid including a prefix in every node of a proof and instead only hash in the prefix lengths
-// This makes the system more space-efficient. See https://ethresear.ch/t/binary-trie-format/7621/6
+// TODO tests for each of these pairs of functions to make sure they don't change the input
 
 // BatchProof consists of a proof for a batch of leaves
 type BatchProof struct {
