@@ -631,6 +631,11 @@ func newSuperDiskTreeNodes(file *os.File) superDiskTreeNodes {
 
 	var files = make([]*os.File, 0)
 
+	// If given a nil file, return a superDiskTreeNodes with no capacity
+	// if file == nil {
+	// 	return superDiskTreeNodes{files, 0}
+	// }
+
 	fmt.Println(os.Getwd())
 	fmt.Println("Making huge files for tree entries: ", superDiskFiles)
 

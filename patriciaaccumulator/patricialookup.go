@@ -9,24 +9,11 @@ import (
 )
 
 type patriciaLookup struct {
-	stateRoot     Hash
-	treeNodes     *ramCacheTreeNodes
-	leafLocations map[MiniHash]uint64
+	stateRoot Hash
+	treeNodes *ramCacheTreeNodes
 }
 
-// func NewPatriciaLookup() *patriciaLookup {
-// 	t := new(patriciaLookup)
-// 	t.treeNodes = make(map[Hash]patriciaNode)
-// 	return t
-// }
-
-// func (t *patriciaLookup) merge(other *patriciaLookup) {
-// 	for hash, node := range other.treeNodes {
-// 		t.treeNodes[hash] = node
-// 	}
-// }
-
-// For debugging
+// String converts a patriciaLookup into a string as an indented list of nodes
 func (t *patriciaLookup) String() string {
 
 	if t.stateRoot != empty {
@@ -35,6 +22,9 @@ func (t *patriciaLookup) String() string {
 	return "empty tree"
 }
 
+// TODO ctrl-f for panic(err)
+
+// subtreeString returns an indented list of nodes that appear under a given hash
 func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 	node, _ := t.treeNodes.read(nodeHash)
 
@@ -50,25 +40,10 @@ func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 	return out
 }
 
-// I changed this since the other code assumes the root is first, we might change back at some point -Bolton
-// func ConstructProof(target uint64, midpoints []uint64, neighborHashes []Hash) PatriciaProof {
-// 	var proof PatriciaProof
-// 	midpoints = midpoints[:len(midpoints)-1] // the last midpoint is the target
-// 	//reverse the order of midpoints and neighborHashes so as to include trees first
-// 	for i, j := 0, len(midpoints)-1; i < j; i, j = i+1, j-1 {
-// 		midpoints[i], midpoints[j] = midpoints[j], midpoints[i]
-// 		neighborHashes[i], neighborHashes[j] = neighborHashes[j], neighborHashes[i]
-// 	}
-// 	proof.target = target
-// 	proof.midpoints = midpoints
-// 	proof.hashes = neighborHashes
-// 	return proof
-// }
-
-// RetrieveProof Creates a proof for a single target against a state root
+// RetrieveProof creates a proof for a single target against a state root
 // The proof consists of:
 //   The target we are proving for
-// 	 all midpoints on the main branch from the root to (Just before?) the proved leaf
+// 	 all midpoints on the main branch from the root to the proved leaf
 //   all hashes of nodes that are neighbors of nodes on the main branch, in order
 func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 
@@ -78,8 +53,7 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	var node patriciaNode
 	var nodeHash Hash
 	var neighborHash Hash
-	// var midpoints = make([]uint64, 0, 64)
-	// var neighborHashes = make([]Hash, 0, 64)
+
 	var ok bool
 	// Start at the root of the tree
 	node, ok = t.treeNodes.read(t.stateRoot)
@@ -92,28 +66,23 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 		proof.prefixes = append(proof.prefixes, node.prefix)
 		if !node.prefix.contains(target) {
 			// The target location is not in range; this is an error
-			// REMARK (SURYA): The current system has no use for proof of non-existence, nor has the means to create one
+			// The current system has no use for proof of non-existence, nor has the means to create one
 			return proof, fmt.Errorf("target location %d not found", target)
 		}
 
-		// If the min is the max, we are at a leaf
-		// TODO do we want to include the midpoint of the leaf node?
-		if node.left == node.right {
-			// REMARK (SURYA): We do not check whether the hash corresponds to the hash of a leaf
-			//perform a sanity check here
+		// If the node prefix is a singleton, we are at a leaf
+		if node.prefix.isSingleton() {
+			// Perform a sanity check here
 			if len(proof.prefixes) != len(proof.hashes)+1 {
-				panic("# midpoints not equal to # hashes")
+				panic("# prefixes not equal to # hashes")
 			}
 			if node.prefix.value() != target {
-				panic("midpoint of leaf not equal to target")
+				panic("prefix value of leaf not equal to target")
 			}
-			// proof = ConstructProof(target, midpoints, neighborHashes)
 			logrus.Trace("Returning valid proof")
 			return proof, nil
 		}
-		if !node.prefix.contains(target) {
-			panic("Target not in range in RetrieveProof")
-		}
+
 		if node.prefix.left().contains(target) {
 			logrus.Debug("Descending Left")
 			nodeHash = node.left
@@ -139,39 +108,6 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	}
 }
 
-// // RetrieveListProofs creates a list of individual proofs for targets, in sorted order
-// func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
-
-// 	// A slice of proofs of individual elements
-// 	individualProofs := make([]PatriciaProof, 0, 3000)
-
-// 	// TODO: is sorting necessary? may already be in order
-// 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-
-// 	logrus.Debug("Starting loop in RetrieveListProofs")
-// 	// Note: a parallelized version is below
-// 	for _, target := range targets {
-// 		logrus.Debug("calling RetrieveProof")
-// 		proof, err := t.RetrieveProof(target)
-// 		if err != nil {
-// 			panic(err)
-// 		}
-// 		rootNode, ok := t.treeNodes.read(t.stateRoot)
-// 		if !ok {
-// 			panic("Could not find Root Node")
-// 		}
-
-// 		if proof.midpoints[0] != rootNode.midpoint {
-// 			panic("Wrong root midpoint")
-// 		}
-
-// 		individualProofs = append(individualProofs, proof)
-// 	}
-
-// 	return individualProofs, nil
-
-// }
-
 // Parallelized version
 // RetrieveListProofs creates a list of individual proofs for targets, in sorted order
 func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, error) {
@@ -190,12 +126,6 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 			}
 			ch <- proof
 		}()
-
-		// rootNode, _ := t.treeNodes.read(t.stateRoot)
-
-		// if proof.midpoints[0] != rootNode.midpoint {
-		// 	panic("Wrong root midpoint")
-		// }
 	}
 
 	for range targets {
@@ -207,80 +137,6 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 	return individualProofs, nil
 
 }
-
-// RetrieveBatchProof creates a proof for a batch of targets against a state root
-// The proof consists of:
-//   The targets we are proving for (in left to right order)
-// 	 all midpoints on the main branches from the root to (Just before?) the proved leaves (in any order)
-//   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
-// NOTE: This version is meant to trim the data that's not needed,
-// func (t *patriciaLookup) RetrieveBatchProofLong(targets []uint64) LongBatchProof {
-
-// 	// If no targets, return empty batchproof
-// 	if len(targets) == 0 {
-// 		return LongBatchProof{targets, make([]Hash, 0, 0), make([]uint64, 0, 0)}
-// 	}
-
-// 	// A slice of proofs of individual elements
-// 	individualProofs, _ := t.RetrieveListProofs(targets)
-
-// 	var midpoints = make([]uint64, 0, 0)
-// 	var midpointsSet = make(map[uint64]bool)
-// 	// Collect all midpoints in a set
-// 	for _, proof := range individualProofs {
-// 		for _, midpoint := range proof.midpoints {
-// 			midpointsSet[midpoint] = true
-// 		}
-// 	}
-// 	// Put set into list form
-// 	for k := range midpointsSet {
-// 		midpoints = append(midpoints, k)
-// 	}
-
-// 	sort.Slice(midpoints, func(i, j int) bool { return midpoints[i] < midpoints[j] })
-// 	// TODO compress this list
-
-// 	hashesToDelete := make(map[Hash]bool)
-
-// 	allHashes := make([]Hash, len(individualProofs[0].hashes))
-// 	copy(allHashes, individualProofs[0].hashes)
-
-// 	// To compress this data into a BatchProof we must remove
-// 	// the hash children of nodes which occur in two individual proofs but fork
-// 	for i := 1; i < len(individualProofs); i++ {
-// 		proofCurrent := individualProofs[i]
-// 		proofPrev := individualProofs[i-1]
-// 		// fmt.Println(proofCurrent)
-// 		// fmt.Println(proofPrev)
-// 		// Iterate through i and i-1 to find the fork
-// 		for j, midpoint := range proofCurrent.midpoints {
-// 			if midpoint != proofPrev.midpoints[j] {
-// 				// Fork found
-// 				// Delete the hashes at j-1 from both
-// 				// filterDelete(hashes, proofCurrent.hashes[j-1])
-// 				hashesToDelete[proofPrev.hashes[j-1]] = true
-// 				// Now add the hashes from currentProof from after the fork
-// 				allHashes = append(allHashes, proofCurrent.hashes[j:]...)
-// 				break
-
-// 			}
-// 		}
-// 	}
-
-// 	// Delete deletable hashes
-// 	hashes := make([]Hash, 0, 0)
-// 	for _, hash := range allHashes {
-// 		if !hashesToDelete[hash] {
-// 			hashes = append(hashes, hash)
-// 		}
-// 	}
-
-// 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-// 	return LongBatchProof{targets, hashes, midpoints}
-
-// 	// TODO
-
-// }
 
 // RetrieveBatchProofShort creates a proof for a batch of targets against a state root
 // The proof consists of:
@@ -378,42 +234,9 @@ func (f *Forest) ProveBatch(hashes []Hash) (BatchProof, error) {
 	return f.lookup.RetrieveBatchProof(targets), nil
 }
 
-// // Helper function that sorts a slice and removes duplicate
-// func sortRemoveDuplicates(a []uint64) {
-// 	sort.Slice(a, func(i, j int) bool { return a[i] < a[j] })
-
-// 	for i := 0; i < len(a)-1; i++ {
-// 		if a[i] == a[i+1] {
-// 			// From https://yourbasic.org/golang/delete-element-slice/
-// 			// Remove the element at index i from a.
-// 			copy(a[i:], a[i+1:]) // Shift a[i+1:] left one index.
-// 			// a[len(a)-1] = ""     // Erase last element (write zero value).
-// 			a = a[:len(a)-1] // Truncate slice.
-
-// 			i--
-// 		}
-// 	}
-// }
-
-// Helper function removes all copies of a specific value from a slice
-func filterDelete(a []Hash, val Hash) {
-	// TODO computational efficiency.
-
-	for i := 0; i < len(a)-1; i++ {
-		if a[i] == val {
-			// From https://yourbasic.org/golang/delete-element-slice/
-			// Remove the element at index i from a.
-			copy(a[i:], a[i+1:]) // Shift a[i+1:] left one index.
-			// a[len(a)-1] = ""     // Erase last element (write zero value).
-			a = a[:len(a)-1] // Truncate slice.
-
-			i--
-		}
-	}
-}
-
 // Adds a hash at a particular location and returns the new state root
-func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
+// This is not used currently, but might be useful in the future
+func (t *patriciaLookup) addSingleHash(location uint64, toAdd Hash) error {
 
 	// TODO: Should the proof branch be the input, so this can be called without a patriciaLookup by a stateless node
 	// branch := t.RetrieveProof(toAdd, location)
@@ -502,14 +325,10 @@ func (t *patriciaLookup) add(location uint64, toAdd Hash) error {
 }
 
 // Based on add above: this code removes a location
-func (t *patriciaLookup) remove(location uint64) {
+// This is not used currently, but might be useful in the future
+func (t *patriciaLookup) removeSingleLocation(location uint64) {
 
-	// TODO: should state root be a property of patriciaLookup, and we avoid a single lookup representing multiple roots?
-	// TODO: Should the proof branch be the input, so this can be called without appatriciaLookup by a stateless node
-	// branch := t.RetrieveProof(toAdd, location)
-
-	// fmt.Println("Removing at", location, "on root", t.stateRoot[:6], len(t.treeNodes), "nodes preexisting. Tree is:")
-	// fmt.Print(t)
+	//
 
 	empty := Hash{}
 	if t.stateRoot == empty {
@@ -632,13 +451,7 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 	}
 	t.treeNodes.delete(hash)
 
-	// logrus.Debug("Removing", locations, node.midpoint, node.left, node.right)
-
-	// check all locations in the right range
-	// if !node.prefix.contains(locations[0]) || !node.prefix.contains(locations[len(locations)-1]) {
-	// 	logrus.Debug(locations, node.prefix.min(), node.prefix.max())
-	// 	panic("Not in range, in removeFromSubtree")
-	// }
+	logrus.Debug("Removing", locations, node.prefix)
 
 	// Check if leaf node
 	if node.left == node.right {
@@ -676,16 +489,6 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 			}
 		}
 	}
-
-	// Linear search
-	// var idx int
-	// idx = len(locations)
-	// for i, location := range locations {
-	// 	if node.prefix.right().contains(location) {
-	// 		idx = i
-	// 		break
-	// 	}
-	// }
 
 	leftLocations := locations[:idx]
 	rightLocations := locations[idx:]
@@ -725,88 +528,6 @@ func (t *patriciaLookup) removeFromSubtree(locations []uint64, hash Hash) (Hash,
 
 	return empty, true, nil
 }
-
-// // Adds hashes to the tree under node hash with starting location
-// // Returns the new hash of the root to replace the given node
-// // Given node assumed to be deleted before this function is called
-// func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds []Hash) (Hash, error) {
-
-// 	logrus.Debug("Starting recursive add")
-
-// 	if len(adds) == 0 {
-// 		return hash, nil
-// 		// panic("recursiveAddRight: Do not call if nothing to add")
-// 	}
-
-// 	node, ok := t.treeNodes.read(hash)
-// 	if !ok {
-// 		panic("Hash not found")
-// 	}
-
-// 	// Index of things to go beneath node
-// 	var i uint64
-// 	i = node.prefix.max() - startLocation
-
-// 	if node.prefix.max() < startLocation {
-// 		i = 0
-// 	}
-
-// 	if i > uint64(len(adds)) {
-// 		i = uint64(len(adds))
-// 	}
-
-// 	inNode := adds[:i]
-// 	outsideNode := adds[i:]
-
-// 	var newNode patriciaNode
-// 	// Add what must be added in the right child
-// 	if i > 0 {
-// 		rightNode, ok := t.treeNodes.read(node.right)
-// 		if !ok {
-// 			panic("could not find node")
-// 		}
-// 		t.treeNodes.delete(node.right)
-// 		newRightHash, err := t.recursiveAddRight(rightNode, startLocation, inNode)
-
-// 		if err != nil {
-// 			panic(err)
-// 		}
-// 		newNode = newInternalPatriciaNode(node.left, newRightHash, node.prefix)
-// 	} else {
-// 		newNode = node
-// 	}
-
-// 	newNodeHash := newNode.hash()
-// 	t.treeNodes.write(newNodeHash, newNode)
-
-// 	// If there are no additional adds, we replace the right child with the new right child
-// 	if len(outsideNode) == 0 {
-// 		return newNodeHash, nil
-// 	} else if len(outsideNode) >= 1 {
-// 		// If there are elements not in the node,
-// 		// they must go in a new subtree which joins with the old node to make a new node
-// 		// Form the rest into their own subtree
-
-// 		siblingNode := newLeafPatriciaNode(outsideNode[0], startLocation+i)
-// 		siblingNodeHash := siblingNode.hash()
-// 		t.treeNodes.write(siblingNodeHash, siblingNode)
-// 		// t.leafLocations[outsideNode[0].Mini()] = startLocation + i
-// 		t.treeNodes.write(outsideNode[0], patriciaNode{outsideNode[0], empty, singletonRange(startLocation + i)})
-// 		combinedNode := newPatriciaNode(newNode, siblingNode)
-
-// 		// t.treeNodes.write(combinedNodeHash, combinedNode)
-
-// 		if len(outsideNode) > 1 {
-// 			newNewNodeHash, err := t.recursiveAddRight(combinedNode, startLocation+i+1, outsideNode[1:])
-// 			return newNewNodeHash, err
-// 		} else {
-// 			combinedNodeHash := combinedNode.hash()
-// 			t.treeNodes.write(combinedNodeHash, combinedNode)
-// 			return combinedNodeHash, nil
-// 		}
-// 	}
-// 	panic("")
-// }
 
 // Adds hashes to the tree under node hash with starting location
 // Returns the new hash of the root to replace the at
@@ -878,111 +599,38 @@ func (t *patriciaLookup) recursiveAddRight(hash Hash, startLocation uint64, adds
 			newNode := newInternalPatriciaNode(newLeftHash, newRightHash, overarchingPrefix)
 			t.treeNodes.write(newNode.hash(), newNode)
 			return newNode.hash(), nil
-		} else {
-			// 2. node is contained in the left half of overarch and there are only adds on the right
-
-			newRightHash, err := t.makeNewTree(startLocation, adds)
-			if err != nil {
-				panic(err)
-			}
-			newNode := newInternalPatriciaNode(hash, newRightHash, overarchingPrefix)
-			t.treeNodes.write(newNode.hash(), newNode)
-			return newNode.hash(), nil
 		}
+		// 2. node is contained in the left half of overarch and there are only adds on the right
 
-	} else {
-		// 3. node hits both sides of overarch (so there are only adds on the right)
-
-		if node.prefix != overarchingPrefix {
-			panic("Error in prefix management")
-		}
-
-		// Since the set of leaves under the node prefix (the over arching prefix in this case)
-		// changes, the node must die
-		t.treeNodes.delete(hash)
-
-		// The right hash is what changes
-		newRightHash, err := t.recursiveAddRight(node.right, startLocation, adds, nil)
+		newRightHash, err := t.makeNewTree(startLocation, adds)
 		if err != nil {
 			panic(err)
 		}
-		// Since all the adds are on the right node.left remains unchanged
-
-		newNode := newInternalPatriciaNode(node.left, newRightHash, overarchingPrefix)
+		newNode := newInternalPatriciaNode(hash, newRightHash, overarchingPrefix)
 		t.treeNodes.write(newNode.hash(), newNode)
 		return newNode.hash(), nil
 
 	}
+	// 3. node hits both sides of overarch (so there are only adds on the right)
 
-	// // If there are adds to the left of the overarching midpoint
-	// if overarchingPrefix.midpoint() < startLocation {
-	// 	i = 0
-	// }
+	if node.prefix != overarchingPrefix {
+		panic("Error in prefix management")
+	}
 
-	// if i > uint64(len(adds)) {
-	// 	i = uint64(len(adds))
-	// }
+	// Since the set of leaves under the node prefix (the over arching prefix in this case)
+	// changes, the node must die
+	t.treeNodes.delete(hash)
 
-	// addsUnderNode := adds[:i]
-	// addsOutsideNode := adds[i:]
+	// The right hash is what changes
+	newRightHash, err := t.recursiveAddRight(node.right, startLocation, adds, nil)
+	if err != nil {
+		panic(err)
+	}
+	// Since all the adds are on the right node.left remains unchanged
 
-	// if i > 0 {
-
-	// 	t.treeNodes.delete(hash)
-
-	// 	// Add what must be added in the right child
-	// 	newRightHash, err := t.recursiveAddRight(node.right, startLocation, addsUnderNode)
-
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-
-	// 	node = newInternalPatriciaNode(node.left, newRightHash, node.prefix)
-	// 	hash = node.hash()
-	// 	t.treeNodes.write(hash, node)
-
-	// }
-
-	// // If there are no additional adds, we replace the right child with the new right child
-	// if len(addsOutsideNode) == 0 {
-
-	// 	return hash, nil
-
-	// } else if len(addsOutsideNode) >= 1 {
-	// 	// If there are elements not in the node,
-
-	// 	// Which elements go in the supernode of the current node?
-
-	// 	supernodePrefix := node.prefix
-	// 	for supernodePrefix.max() <= node.prefix.max() {
-	// 		supernodePrefix = supernodePrefix.up()
-	// 	}
-
-	// 	j := supernodePrefix.max() - (startLocation + i)
-
-	// 	if j > uint64(len(addsOutsideNode)) {
-	// 		j = uint64(len(addsOutsideNode))
-	// 	}
-	// 	addsInsideSuper := addsOutsideNode[:j]
-	// 	addsOutsideSuper := addsOutsideNode[j:]
-
-	// 	insideSuperNode, err := t.makeNewTree(startLocation+i, addsInsideSuper)
-
-	// 	if err != nil {
-	// 		return empty, err
-	// 	}
-
-	// 	fmt.Println(startLocation, i, j, len(addsOutsideNode), len(addsOutsideSuper), len(addsInsideSuper))
-	// 	// 1008 to 1024        1009 to 1010
-	// 	newNode := newPatriciaNode(node, insideSuperNode)
-	// 	newHash := newNode.hash()
-	// 	t.treeNodes.write(newHash, newNode)
-
-	// 	return t.recursiveAddRight(newHash, startLocation+i+j, addsOutsideSuper)
-
-	// }
-
-	panic("")
+	newNode := newInternalPatriciaNode(node.left, newRightHash, overarchingPrefix)
+	t.treeNodes.write(newNode.hash(), newNode)
+	return newNode.hash(), nil
 
 }
 
