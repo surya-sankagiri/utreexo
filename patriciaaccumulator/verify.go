@@ -1,6 +1,6 @@
 package patriciaaccumulator
 
-import "math"
+import "fmt"
 
 // verifyBatchProof takes a block proof and reconstructs / verifies it.
 // takes a blockproof to verify, list of leafHashes at the targets, and the state root to check against.
@@ -27,27 +27,18 @@ func verifyBatchProof(
 	return verifyLongBatchProof(lbp, root, leafHashes)
 }
 
-//prefixFromLogWidth returns the unique prefixRange whose width is 2**logwidth and contains target
-//TODO: move to prefixrange.go?
-func prefixFromLogWidth(target uint64, logwidth uint8) prefixRange {
-	width := uint64(math.Exp2(logwidth))
-	n := target / width         // n shd. be s.t. target is in the interval [n*width, (n+1)*width)
-	prefix := (2*n + 1) * width // (2*n + 1) * width is the representation for the interval [n*width, (n+1)*width)
-	return prefixRange{prefix}
-}
-
 //unpackBatchProof converts BatchProof to LongBatchProof
 func unpackBatchProof(bp BatchProof) LongBatchProof {
 	prefixes := make([]prefixRange, len(bp.prefixLogWidths))
 	i := 0
-	for t := range bp.Targets {
+	for _, t := range bp.Targets {
 		// for every target t, convert all prefixlogwidths associated with t to prefixes
 		if bp.prefixLogWidths[i] != 0 {
 			panic("Logical error!")
 		}
 		for {
 			prefixes[i] = prefixFromLogWidth(t, bp.prefixLogWidths[i])
-			i += 1
+			i++
 			if i == len(bp.prefixLogWidths) || bp.prefixLogWidths[i] == 0 {
 				break
 			}
@@ -90,27 +81,30 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 	hasLeftChild := false
 	hasRightChild := false
 	for _, prefix := range bp.prefixes {
-		if prefix.midpoint() < rootPrefix.midpoint() {
+		if prefix.subset(rootPrefix.left()) {
 			hasLeftChild = true
 			leftBatchProof.prefixes = append(leftBatchProof.prefixes, prefix)
-		} else if prefix.midpoint() > rootPrefix.midpoint() {
+		} else if prefix.subset(rootPrefix.right()) {
 			hasRightChild = true
 			rightBatchProof.prefixes = append(rightBatchProof.prefixes, prefix)
+		} else {
+			panic(fmt.Sprintf("Prefix should be subset of rootPrefix"))
 		}
 	}
 	for _, target := range bp.Targets {
-		if target < rootPrefix.midpoint() {
+		if rootPrefix.left().contains(target) {
 			hasLeftChild = true
 			leftBatchProof.Targets = append(leftBatchProof.Targets, target)
 
-		} else if target >= rootPrefix.midpoint() { // Equal means target in right side
+		} else if rootPrefix.right().contains(target) {
 			hasRightChild = true
 			rightBatchProof.Targets = append(rightBatchProof.Targets, target)
 
+		} else {
+			panic("Target should be contained in rootPrefix")
 		}
 	}
 
-	// var leftHash, rightHash Hash
 	numLeftTargets := len(leftBatchProof.Targets)
 	// If it has a left and right child, we must simply prove the subtrees
 	if hasLeftChild && hasRightChild {

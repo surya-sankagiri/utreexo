@@ -104,6 +104,14 @@ func (r prefixRange) up() prefixRange {
 
 }
 
+// prefixFromLogWidth returns the unique prefixRange whose width is 2**logwidth and contains target
+func prefixFromLogWidth(target uint64, logWidth uint8) prefixRange {
+	width := uint64(1 << logWidth) // width = 2**logwidth
+	n := target / width            // n shd. be s.t. target is in the interval [n*width, (n+1)*width)
+	prefix := (2*n + 1) * width    // (2*n + 1) * width is the representation for the interval [n*width, (n+1)*width)
+	return prefixRange(prefix)
+}
+
 // The smallest prefix range containing the two disjoint ranges
 func commonPrefix(child1, child2 prefixRange) prefixRange {
 	if child1.subset(child2) || child2.subset(child1) {
