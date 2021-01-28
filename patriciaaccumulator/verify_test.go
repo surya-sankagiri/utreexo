@@ -10,7 +10,7 @@ func TestForestVerify(t *testing.T) {
 	// Setup accumulator
 
 	// TODO remove boltonbailey path from chdir
-	err := os.Chdir("/Users/boltonbailey/Library/Application Support/Bitcoin/blocks")
+	err := os.Chdir("/Users/suryanarayanasankagiri/Library/Application Support/Bitcoin/blocks")
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +24,7 @@ func TestForestVerify(t *testing.T) {
 	sc := NewSimChain(0x07)
 	sc.lookahead = 400
 
-	for b := 0; b < 5; b++ {
+	for b := 0; b < 3; b++ {
 
 		adds, _, delHashes := sc.NextBlock(numAdds)
 

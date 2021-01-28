@@ -38,6 +38,8 @@ func unpackBatchProof(bp BatchProof) LongBatchProof {
 		}
 		for {
 			prefixes[i] = prefixFromLogWidth(t, bp.prefixLogWidths[i])
+			//this generates signleton prefixes as well, which causes problems ahead
+			//TODO fix it
 			i++
 			if i == len(bp.prefixLogWidths) || bp.prefixLogWidths[i] == 0 {
 				break
@@ -75,6 +77,10 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 		}
 	}
 	rootPrefix := biggestPrefix
+	if rootPrefix.isSingleton() {
+		fmt.Println("root prefix:", rootPrefix)
+		panic("rootPrefix should not be a singleton")
+	}
 
 	// Does the root midpoint have two children?
 	var leftBatchProof, rightBatchProof LongBatchProof
@@ -87,7 +93,8 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 		} else if prefix.subset(rootPrefix.right()) {
 			hasRightChild = true
 			rightBatchProof.prefixes = append(rightBatchProof.prefixes, prefix)
-		} else {
+		} else if prefix != rootPrefix { // it is possible that prefix == rootPrefix, in which case we do nothing
+			fmt.Println("prefix:", prefix, "root prefix", rootPrefix)
 			panic(fmt.Sprintf("Prefix should be subset of rootPrefix"))
 		}
 	}
