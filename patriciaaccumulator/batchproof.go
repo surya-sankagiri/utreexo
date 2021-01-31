@@ -30,10 +30,16 @@ import (
 type BatchProof struct {
 	Targets []uint64
 	// List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements)
-	// Should be in DFS order by midpoint of the node prefix
+	// Should be in bottom-first DFS order
 	hashes []Hash
 	// List of log widths of prefixes of nodes that are ancestors of deleted elements (in DFS order, starting with the leftmost leaf )
 	prefixLogWidths []uint8
+}
+
+func (bp BatchProof) String() string {
+	return fmt.Sprint("(BatchProof - Targets: ", bp.Targets,
+		" hashes: ", bp.hashes,
+		" prefixLogWidths ", bp.prefixLogWidths, ")\n")
 }
 
 // LongBatchProof is a similar to BatchProof, but with prefixes explicit.
@@ -49,6 +55,12 @@ type LongBatchProof struct {
 	// TODO in the more efficient version, this is a slice of uint8s representing the branching off points.
 }
 
+func (lbp LongBatchProof) String() string {
+	return fmt.Sprint("(LongBatchProof - Targets: ", lbp.Targets,
+		" hashes: ", lbp.hashes,
+		" prefixes ", lbp.prefixes, ")\n")
+}
+
 // PatriciaProof is a potential replacement structure for a single proof
 type PatriciaProof struct {
 	target   uint64
@@ -59,6 +71,12 @@ type PatriciaProof struct {
 	// We then have to fill in the hashes of the children we proceed in order left to right
 	// 1. when a hash is a leaf, we have that hash
 	// 2. when we don't have a leaf, we take the next element of hashes, and we order hashes so that this element is the correct next one.
+}
+
+func (p PatriciaProof) String() string {
+	return fmt.Sprint("(PatriciaProof - Targets: ", p.target,
+		" hashes: ", p.hashes,
+		" prefixes ", p.prefixes, ")\n")
 }
 
 func (bp BatchProof) SortTargets() {

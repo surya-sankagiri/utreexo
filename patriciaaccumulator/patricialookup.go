@@ -48,8 +48,11 @@ func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 
 	var proof PatriciaProof
+	proof.target = target
 	proof.prefixes = make([]prefixRange, 0, 64)
 	proof.hashes = make([]Hash, 0, 64)
+	reversedPrefixes := make([]prefixRange, 0, 64)
+	reversedHashes := make([]Hash, 0, 64)
 	var node patriciaNode
 	var nodeHash Hash
 	var neighborHash Hash
@@ -63,7 +66,7 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 	// Discover the path to the leaf
 	for {
 		logrus.Debug(fmt.Sprintln("Descending to leaf - at node", node.prefix.min(), node.prefix.max(), target))
-		proof.prefixes = append(proof.prefixes, node.prefix)
+		reversedPrefixes = append(reversedPrefixes, node.prefix)
 		if !node.prefix.contains(target) {
 			// The target location is not in range; this is an error
 			// The current system has no use for proof of non-existence, nor has the means to create one
@@ -73,13 +76,19 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 		// If the node prefix is a singleton, we are at a leaf
 		if node.prefix.isSingleton() {
 			// Perform a sanity check here
-			if len(proof.prefixes) != len(proof.hashes)+1 {
+			if len(reversedPrefixes) != len(reversedHashes)+1 {
 				panic("# prefixes not equal to # hashes")
 			}
 			if node.prefix.value() != target {
 				panic("prefix value of leaf not equal to target")
 			}
 			logrus.Trace("Returning valid proof")
+			for i := range reversedPrefixes {
+				proof.prefixes = append(proof.prefixes, reversedPrefixes[len(reversedPrefixes)-1-i])
+			}
+			for i := range reversedHashes {
+				proof.hashes = append(proof.hashes, reversedHashes[len(reversedHashes)-1-i])
+			}
 			return proof, nil
 		}
 
@@ -104,7 +113,7 @@ func (t *patriciaLookup) RetrieveProof(target uint64) (PatriciaProof, error) {
 		if !ok {
 			return proof, fmt.Errorf("Patricia Node %x not found", neighborHash)
 		}
-		proof.hashes = append(proof.hashes, neighborHash)
+		reversedHashes = append(reversedHashes, neighborHash)
 	}
 }
 
@@ -144,6 +153,7 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 // 	 all midpoints on the main branches from the root to the proved leaves, represented as widths (uint8), in DFS order. ()
 //   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
 // NOTE: This version is meant to trim the data that's not needed,
+// TODO abstract this into two functions, one that makes a long batch proof, one that shortens it
 func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 
 	// If no targets, return empty batchproof
@@ -163,12 +173,12 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 
 	// Add prefixes, one individualProof at a time, to prefixesWidth, and use prefixesSet to remove redundancies
 	for _, proof := range individualProofs {
-		prefixLogWidths = append(prefixLogWidths, 0)
+		// prefixLogWidths = append(prefixLogWidths, 0)
 		for _, prefix := range proof.prefixes {
 			//check if this prefix has already been seen before
 			if _, ok := prefixesSet[prefix]; !ok {
 				prefixesSet[prefix] = true
-				logWidth := prefix.logWidth() + 1
+				logWidth := prefix.logWidth()
 				prefixLogWidths = append(prefixLogWidths, logWidth)
 			}
 		}

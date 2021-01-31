@@ -71,10 +71,13 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 
 	biggestPrefix := bp.prefixes[0]
 	// Figure out the root midpoint
+	fmt.Println(len(bp.prefixes))
 	for _, prefix := range bp.prefixes {
+
 		if biggestPrefix.subset(prefix) {
 			biggestPrefix = prefix
 		}
+		fmt.Println(prefix, biggestPrefix)
 	}
 	rootPrefix := biggestPrefix
 	if rootPrefix.isSingleton() {

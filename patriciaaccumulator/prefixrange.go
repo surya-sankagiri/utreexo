@@ -48,7 +48,7 @@ func (r prefixRange) max() uint64 {
 
 }
 
-func (r *prefixRange) String() string {
+func (r prefixRange) String() string {
 
 	return fmt.Sprint("(Range from ", r.min(), " to ", r.max(), ")")
 }
