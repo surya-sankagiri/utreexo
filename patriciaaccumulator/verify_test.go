@@ -8,7 +8,7 @@ import (
 
 func TestSmallVerify(t *testing.T) {
 
-	err := os.Chdir("/Users/boltonbailey/Library/Application Support/Bitcoin/blocks")
+	err := os.Chdir("/Users/suryanarayanasankagiri/Library/Application Support/Bitcoin/blocks")
 	if err != nil {
 		panic(err)
 	}
@@ -63,7 +63,7 @@ func TestChainVerify(t *testing.T) {
 	// Setup accumulator
 
 	// TODO remove boltonbailey path from chdir
-	err := os.Chdir("/Users/boltonbailey/Library/Application Support/Bitcoin/blocks")
+	err := os.Chdir("/Users/suryanarayanasankagiri/Library/Application Support/Bitcoin/blocks")
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +72,7 @@ func TestChainVerify(t *testing.T) {
 
 	// Setup simulated chain
 
-	numAdds := uint32(10000)
+	numAdds := uint32(100)
 
 	sc := NewSimChain(0x07)
 	sc.lookahead = 400

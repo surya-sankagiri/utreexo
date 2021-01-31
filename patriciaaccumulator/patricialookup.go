@@ -197,14 +197,14 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 		// fmt.Println(proofCurrent)
 		// fmt.Println(proofPrev)
 		// Iterate through i and i-1 to find the fork
-		for j, prefix := range proofCurrent.prefixes {
-			if prefix != proofPrev.prefixes[j] {
+		for j := range proofCurrent.prefixes {
+			if proofCurrent.prefixes[len(proofCurrent.prefixes)-j-1] != proofPrev.prefixes[len(proofPrev.prefixes)-j-1] {
 				// Fork found
 				// Delete the hashes at j-1 from both
 				// filterDelete(hashes, proofCurrent.hashes[j-1])
-				hashesToDelete[proofPrev.hashes[j-1]] = true
+				hashesToDelete[proofPrev.hashes[len(proofPrev.hashes)-j]] = true
 				// Now add the hashes from currentProof from after the fork
-				allHashes = append(allHashes, proofCurrent.hashes[j:]...)
+				allHashes = append(allHashes, proofCurrent.hashes[:len(proofCurrent.hashes)-j]...)
 				break
 			}
 		}

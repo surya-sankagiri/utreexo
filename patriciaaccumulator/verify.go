@@ -1,6 +1,10 @@
 package patriciaaccumulator
 
-import "fmt"
+import (
+	"fmt"
+
+	logrus "github.com/sirupsen/logrus"
+)
 
 // verifyBatchProof takes a block proof and reconstructs / verifies it.
 // takes a blockproof to verify, list of leafHashes at the targets, and the state root to check against.
@@ -31,6 +35,8 @@ func verifyBatchProof(
 func unpackBatchProof(bp BatchProof) LongBatchProof {
 	prefixes := make([]prefixRange, len(bp.prefixLogWidths))
 	i := 0
+	logrus.Println("PrefixLogWidths:", bp.prefixLogWidths)
+	logrus.Println("Targets:", bp.Targets)
 	for _, t := range bp.Targets {
 		// for every target t, convert all prefixlogwidths associated with t to prefixes
 		if bp.prefixLogWidths[i] != 0 {
@@ -38,13 +44,14 @@ func unpackBatchProof(bp BatchProof) LongBatchProof {
 		}
 		for {
 			prefixes[i] = prefixFromLogWidth(t, bp.prefixLogWidths[i])
-			//this generates signleton prefixes as well, which causes problems ahead
-			//TODO fix it
 			i++
 			if i == len(bp.prefixLogWidths) || bp.prefixLogWidths[i] == 0 {
 				break
 			}
 		}
+		// if i == len(bp.prefixLogWidths) {
+		// 	break
+		// }
 	}
 	return LongBatchProof{bp.Targets, bp.hashes, prefixes}
 }
@@ -56,16 +63,21 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 	if len(leafHashes) != len(bp.Targets) {
 		panic("Wrong number of targets")
 	}
-
 	if len(bp.prefixes) == 0 {
+		panic("Number of prefixes in a proof should never be zero")
+	}
+	if len(bp.prefixes) == 1 {
 		// This should mean there is a single leaf
 		if len(bp.Targets) != 1 {
 			panic("Not a single leaf")
 
 		}
 		// Create a node out of this single leaf and return its hash
-		prefix := prefixFromLogWidth(bp.Targets[0], 0)
-		node := newInternalPatriciaNode(leafHashes[0], leafHashes[0], prefix)
+		// prefix := prefixFromLogWidth(bp.Targets[0], 0)
+		if !bp.prefixes[0].contains(bp.Targets[0]) {
+			panic("A single prefix should contain the corresponding target")
+		}
+		node := newLeafPatriciaNode(leafHashes[0], bp.Targets[0])
 		return node.hash(), 1
 	}
 
