@@ -56,12 +56,21 @@ func unpackBatchProof(bp BatchProof) LongBatchProof {
 	return LongBatchProof{bp.Targets, bp.hashes, prefixes}
 }
 
-// getRootHash determines the root that the batchproof was produced on
-// Also returns the number of hashes used for recursion
+// getRootHash determines the root that the batchproof was produced on.
+// Also returns the number of internal hashes used for recursion
+// The input leafhashes is the slice of hashes,
+// corresponding to the  targets in the proof
 func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 	// a sanity check
 	if len(leafHashes) != len(bp.Targets) {
 		panic("Wrong number of targets")
+	}
+	// The number of internal nodes of the batchproof should be one less than the number of endpoints
+	// Endpoints are either hashes or targets
+	// Internal nodes appear as prefixes but not targets
+	if len(bp.hashes) != len(bp.prefixes)-2*len(bp.Targets)+1 {
+		fmt.Print(bp)
+		panic("Malformed LongBatchProof")
 	}
 	if len(bp.prefixes) == 0 {
 		panic("Number of prefixes in a proof should never be zero")
@@ -115,11 +124,15 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 	}
 	for _, target := range bp.Targets {
 		if rootPrefix.left().contains(target) {
-			hasLeftChild = true
+			if !hasLeftChild {
+				panic("Should have a left child")
+			}
 			leftBatchProof.Targets = append(leftBatchProof.Targets, target)
 
 		} else if rootPrefix.right().contains(target) {
-			hasRightChild = true
+			if !hasRightChild {
+				panic("Should have a right child")
+			}
 			rightBatchProof.Targets = append(rightBatchProof.Targets, target)
 
 		} else {
@@ -144,6 +157,11 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 		leftBatchProof.hashes = bp.hashes
 		leftHash, leftUsed := leftBatchProof.getRootHash(leafHashes[:numLeftTargets])
 
+		if len(bp.hashes) < leftUsed+1 {
+			fmt.Print(bp, leftUsed, leafHashes, "\n")
+			panic("Not enough hashes")
+		}
+
 		node := newInternalPatriciaNode(leftHash, bp.hashes[leftUsed], rootPrefix)
 
 		return node.hash(), leftUsed + 1
@@ -151,6 +169,9 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 	// If no left child
 	if !hasLeftChild && hasRightChild {
 		leftUsed := 1
+		if len(bp.hashes) < 1 {
+			panic("There are no hashes left, but there should be some to cover the right side")
+		}
 		rightBatchProof.hashes = bp.hashes[leftUsed:]
 		rightHash, rightUsed := rightBatchProof.getRootHash(leafHashes[numLeftTargets:])
 

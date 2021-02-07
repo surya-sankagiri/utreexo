@@ -2,12 +2,17 @@ package patriciaaccumulator
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 )
 
 // Hash :
 type Hash [32]byte
+
+func (h Hash) String() string {
+	return hex.EncodeToString(h[:6])
+}
 
 // Prefix for printfs
 func (h Hash) Prefix() []byte {

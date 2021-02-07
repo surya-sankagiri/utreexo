@@ -3,12 +3,21 @@ package patriciaaccumulator
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"testing"
 )
 
 func TestSmallVerify(t *testing.T) {
 
-	err := os.Chdir("/Users/suryanarayanasankagiri/Library/Application Support/Bitcoin/blocks")
+	usr, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	home := usr.HomeDir
+	dir := home + "/Library/Application Support/Bitcoin/"
+
+	err = os.Chdir(dir + "blocks")
 	if err != nil {
 		panic(err)
 	}
@@ -62,8 +71,15 @@ func TestChainVerify(t *testing.T) {
 
 	// Setup accumulator
 
-	// TODO remove boltonbailey path from chdir
-	err := os.Chdir("/Users/suryanarayanasankagiri/Library/Application Support/Bitcoin/blocks")
+	usr, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	home := usr.HomeDir
+	dir := home + "/Library/Application Support/Bitcoin/"
+
+	err = os.Chdir(dir + "blocks")
 	if err != nil {
 		panic(err)
 	}
@@ -82,6 +98,20 @@ func TestChainVerify(t *testing.T) {
 		adds, _, delHashes := sc.NextBlock(numAdds)
 
 		bp, err := f.ProveBatch(delHashes)
+
+		// The number of zeros in the bp.PrefixLogWidths should be the same as the number of hashes
+		numZeros := 0
+		for _, logWidth := range bp.prefixLogWidths {
+			if logWidth == 0 {
+				numZeros++
+			}
+		}
+		if numZeros != len(delHashes) {
+			t.Logf("Num zeros %d", numZeros)
+			t.Logf("Num hashes %d", len(delHashes))
+			t.Fatal("Wrong number of zeros")
+		}
+
 		if err != nil {
 			t.Fatal(err)
 		}

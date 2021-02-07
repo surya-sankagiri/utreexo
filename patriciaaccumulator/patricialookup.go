@@ -128,13 +128,13 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 
 	for _, target := range targets {
 
-		go func() {
-			proof, err := t.RetrieveProof(target)
+		go func(target_ uint64) {
+			proof, err := t.RetrieveProof(target_)
 			if err != nil {
 				panic(err)
 			}
 			ch <- proof
-		}()
+		}(target)
 	}
 
 	for range targets {
@@ -219,6 +219,19 @@ func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 	}
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+
+	numZeros := 0
+	for _, logWidth := range prefixLogWidths {
+		if logWidth == 0 {
+			numZeros++
+		}
+	}
+	if numZeros != len(targets) {
+		fmt.Printf("Num zeros %d\n", numZeros)
+		fmt.Printf("Num targets %d\n", len(targets))
+		panic("Wrong number of zeros")
+	}
+
 	return BatchProof{targets, hashes, prefixLogWidths}
 }
 

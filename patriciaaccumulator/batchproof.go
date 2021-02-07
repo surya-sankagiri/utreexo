@@ -74,7 +74,7 @@ type PatriciaProof struct {
 }
 
 func (p PatriciaProof) String() string {
-	return fmt.Sprint("(PatriciaProof - Targets: ", p.target,
+	return fmt.Sprint("(PatriciaProof - Target: ", p.target,
 		" hashes: ", p.hashes,
 		" prefixes ", p.prefixes, ")\n")
 }
