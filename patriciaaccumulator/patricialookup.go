@@ -17,7 +17,7 @@ type patriciaLookup struct {
 func (t *patriciaLookup) String() string {
 
 	if t.stateRoot != empty {
-		return fmt.Sprint("Root is: ", t.stateRoot[:6], "\n", t.subtreeString(t.stateRoot), "\n")
+		return fmt.Sprint("Root is: ", t.stateRoot, "\n", t.subtreeString(t.stateRoot), "\n")
 	}
 	return "empty tree"
 }
@@ -31,9 +31,9 @@ func (t *patriciaLookup) subtreeString(nodeHash Hash) string {
 	out := ""
 
 	if node.left == node.right {
-		return fmt.Sprint("leafnode ", "hash ", nodeHash[:6], " at postion ", node.prefix.value(), " left ", node.left[:6], " right ", node.right[:6], "\n")
+		return fmt.Sprint("leafnode ", "hash ", nodeHash, " at position ", node.prefix.value(), " left ", node.left, " right ", node.right, "\n")
 	}
-	out += fmt.Sprint("hash ", nodeHash[:6], " prefix:", node.prefix.String(), " left ", node.left[:6], " right ", node.right[:6], "\n")
+	out += fmt.Sprint("hash ", nodeHash, " prefix:", node.prefix.String(), " left ", node.left, " right ", node.right, "\n")
 	out += indent.String(" ", t.subtreeString(node.left))
 	out += indent.String(" ", t.subtreeString(node.right))
 

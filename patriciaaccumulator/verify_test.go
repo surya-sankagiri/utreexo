@@ -67,6 +67,116 @@ func TestSmallVerify(t *testing.T) {
 	}
 }
 
+func TestMediumVerifyRight(t *testing.T) {
+
+	usr, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	home := usr.HomeDir
+	dir := home + "/Library/Application Support/Bitcoin/"
+
+	err = os.Chdir(dir + "blocks")
+	if err != nil {
+		panic(err)
+	}
+
+	f := NewForest(nil, false)
+
+	leaf1 := Leaf{Hash: Hash{1}}
+	leaf2 := Leaf{Hash: Hash{2}}
+	leaf3 := Leaf{Hash: Hash{3}}
+	leaf4 := Leaf{Hash: Hash{4}}
+	leaf5 := Leaf{Hash: Hash{5}}
+	leaf6 := Leaf{Hash: Hash{6}}
+	leaf7 := Leaf{Hash: Hash{7}}
+	leaf8 := Leaf{Hash: Hash{8}}
+
+	_, err = f.Modify([]Leaf{leaf1, leaf2}, []uint64{})
+
+	_, err = f.Modify([]Leaf{leaf3, leaf4}, []uint64{1})
+	_, err = f.Modify([]Leaf{leaf5, leaf6}, []uint64{2})
+	_, err = f.Modify([]Leaf{leaf7, leaf8}, []uint64{4})
+
+	if err != nil {
+		t.Fail()
+	}
+
+	delHashes := []Hash{leaf7.Hash, leaf8.Hash}
+
+	bp, err := f.ProveBatch(delHashes)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Print("Foo\n")
+	fmt.Print(f)
+	fmt.Print(bp)
+
+	correct := verifyBatchProof(bp, f.lookup.stateRoot, delHashes)
+
+	if !correct {
+		t.Fatal("verification failed")
+	}
+}
+
+func TestMediumVerifyLeft(t *testing.T) {
+
+	usr, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	home := usr.HomeDir
+	dir := home + "/Library/Application Support/Bitcoin/"
+
+	err = os.Chdir(dir + "blocks")
+	if err != nil {
+		panic(err)
+	}
+
+	f := NewForest(nil, false)
+
+	leaf1 := Leaf{Hash: Hash{1}}
+	leaf2 := Leaf{Hash: Hash{2}}
+	leaf3 := Leaf{Hash: Hash{3}}
+	leaf4 := Leaf{Hash: Hash{4}}
+	leaf5 := Leaf{Hash: Hash{5}}
+	leaf6 := Leaf{Hash: Hash{6}}
+	leaf7 := Leaf{Hash: Hash{7}}
+	leaf8 := Leaf{Hash: Hash{8}}
+
+	_, err = f.Modify([]Leaf{leaf1, leaf2}, []uint64{})
+
+	_, err = f.Modify([]Leaf{leaf3, leaf4}, []uint64{1})
+	_, err = f.Modify([]Leaf{leaf5, leaf6}, []uint64{2})
+	_, err = f.Modify([]Leaf{leaf7, leaf8}, []uint64{4})
+
+	if err != nil {
+		t.Fail()
+	}
+
+	delHashes := []Hash{leaf1.Hash, leaf4.Hash}
+
+	bp, err := f.ProveBatch(delHashes)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Print("Foo\n")
+	fmt.Print(f)
+	fmt.Print(bp)
+
+	correct := verifyBatchProof(bp, f.lookup.stateRoot, delHashes)
+
+	if !correct {
+		t.Fatal("verification failed")
+	}
+}
+
 func TestChainVerify(t *testing.T) {
 
 	// Setup accumulator

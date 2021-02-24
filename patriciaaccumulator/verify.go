@@ -17,7 +17,13 @@ func verifyLongBatchProof(
 		return true
 	}
 
-	proofRoot, _ := bp.getRootHash(leafHashes)
+	proofRoot := bp.getRootHash(leafHashes)
+
+	fmt.Println("VerifyLongBatchProof")
+	fmt.Println(bp)
+	fmt.Println(leafHashes)
+	fmt.Println(proofRoot)
+	fmt.Println(root)
 
 	return proofRoot == root
 
@@ -60,7 +66,8 @@ func unpackBatchProof(bp BatchProof) LongBatchProof {
 // Also returns the number of internal hashes used for recursion
 // The input leafhashes is the slice of hashes,
 // corresponding to the  targets in the proof
-func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
+func (bp LongBatchProof) getRootHash(leafHashes []Hash) Hash {
+	fmt.Println("Calling LongBatchProof.getRootHash")
 	// a sanity check
 	if len(leafHashes) != len(bp.Targets) {
 		panic("Wrong number of targets")
@@ -87,18 +94,19 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 			panic("A single prefix should contain the corresponding target")
 		}
 		node := newLeafPatriciaNode(leafHashes[0], bp.Targets[0])
-		return node.hash(), 1
+		fmt.Println("Leaf node returning", node.hash())
+		return node.hash()
 	}
 
 	biggestPrefix := bp.prefixes[0]
 	// Figure out the root midpoint
-	fmt.Println(len(bp.prefixes))
+	// fmt.Println(len(bp.prefixes))
 	for _, prefix := range bp.prefixes {
 
 		if biggestPrefix.subset(prefix) {
 			biggestPrefix = prefix
 		}
-		fmt.Println(prefix, biggestPrefix)
+		// fmt.Println(prefix, biggestPrefix)
 	}
 	rootPrefix := biggestPrefix
 	if rootPrefix.isSingleton() {
@@ -141,43 +149,66 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) (Hash, int) {
 	}
 
 	numLeftTargets := len(leftBatchProof.Targets)
+	leftHashesUsed := len(leftBatchProof.prefixes) - 2*len(leftBatchProof.Targets) + 1
+	rightHashesUsed := len(bp.hashes) - leftHashesUsed
+	fmt.Println("Left/Right hashes split", leftHashesUsed, rightHashesUsed)
 	// If it has a left and right child, we must simply prove the subtrees
 	if hasLeftChild && hasRightChild {
-		leftBatchProof.hashes = bp.hashes
-		leftHash, leftUsed := leftBatchProof.getRootHash(leafHashes[:numLeftTargets])
-		rightBatchProof.hashes = bp.hashes[leftUsed:]
-		rightHash, rightUsed := rightBatchProof.getRootHash(leafHashes[numLeftTargets:])
+		fmt.Println("Both Left and Right Child")
+
+		leftBatchProof.hashes = bp.hashes[:leftHashesUsed]
+		leftHash := leftBatchProof.getRootHash(leafHashes[:numLeftTargets])
+		rightBatchProof.hashes = bp.hashes[leftHashesUsed:]
+		rightHash := rightBatchProof.getRootHash(leafHashes[numLeftTargets:])
 
 		node := newInternalPatriciaNode(leftHash, rightHash, rootPrefix)
 
-		return node.hash(), leftUsed + rightUsed
+		fmt.Println("Both left right returning", node.hash())
+
+		return node.hash()
 	}
 	// If no right child
 	if hasLeftChild && !hasRightChild {
-		leftBatchProof.hashes = bp.hashes
-		leftHash, leftUsed := leftBatchProof.getRootHash(leafHashes[:numLeftTargets])
+		fmt.Println("Only Left Child")
 
-		if len(bp.hashes) < leftUsed+1 {
-			fmt.Print(bp, leftUsed, leafHashes, "\n")
+		if rightHashesUsed != 1 {
+			panic("There should be only one right hash used")
+		}
+
+		leftBatchProof.hashes = bp.hashes[:leftHashesUsed]
+		leftHash := leftBatchProof.getRootHash(leafHashes[:numLeftTargets])
+
+		if len(bp.hashes) < leftHashesUsed+1 {
+			fmt.Print(bp, leftHashesUsed, leafHashes, "\n")
 			panic("Not enough hashes")
 		}
 
-		node := newInternalPatriciaNode(leftHash, bp.hashes[leftUsed], rootPrefix)
+		node := newInternalPatriciaNode(leftHash, bp.hashes[leftHashesUsed], rootPrefix)
 
-		return node.hash(), leftUsed + 1
+		fmt.Println("returning", node.hash())
+
+		return node.hash()
 	}
 	// If no left child
 	if !hasLeftChild && hasRightChild {
-		leftUsed := 1
+		fmt.Println("Only Right Child")
+
+		if leftHashesUsed != 1 {
+			panic("There should be only one hash")
+		}
+
 		if len(bp.hashes) < 1 {
 			panic("There are no hashes left, but there should be some to cover the right side")
 		}
-		rightBatchProof.hashes = bp.hashes[leftUsed:]
-		rightHash, rightUsed := rightBatchProof.getRootHash(leafHashes[numLeftTargets:])
+		rightBatchProof.hashes = bp.hashes[:rightHashesUsed]
+		rightHash := rightBatchProof.getRootHash(leafHashes[numLeftTargets:])
 
-		node := newInternalPatriciaNode(bp.hashes[0], rightHash, rootPrefix)
+		node := newInternalPatriciaNode(bp.hashes[rightHashesUsed], rightHash, rootPrefix)
 
-		return node.hash(), 1 + rightUsed
+		fmt.Println("Only right inputs", bp.hashes[rightHashesUsed], rightHash)
+		fmt.Println("Only right returning", node.hash())
+
+		return node.hash()
 	}
 	// If there should never be neither left or right, except in the leaf case, which we have already covered
 	panic("Oops")

@@ -45,7 +45,7 @@ func (bp BatchProof) String() string {
 // LongBatchProof is a similar to BatchProof, but with prefixes explicit.
 type LongBatchProof struct {
 	Targets  []uint64
-	hashes   []Hash        // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) (should they be in DFS order?)
+	hashes   []Hash        // List of all hashes in the proof (that is, hashes of siblings of ancestors of deleted elements) These are given IN THE ORDER THEY WILL BE ACCESSED BY THE VERIFIER. That is, if we scan the tree of prefixes in left-to-right DFS order reconstructing the hashes associated with those prefixes, the hashes should come in the order they are needed.
 	prefixes []prefixRange // List of equal midpoints of nodes that are ancestors of deleted elements
 	// Checking a proof requires all midpoints in the branch to the element, and all hashes of siblings
 	// We therefore have the midpoint tree. Our first step in proof checking is constructing this tree
