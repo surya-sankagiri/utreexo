@@ -177,15 +177,17 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) Hash {
 
 		leftBatchProof.hashes = bp.hashes[:leftHashesUsed]
 		leftHash := leftBatchProof.getRootHash(leafHashes[:numLeftTargets])
+		rightHash := bp.hashes[leftHashesUsed]
 
 		if len(bp.hashes) < leftHashesUsed+1 {
 			fmt.Print(bp, leftHashesUsed, leafHashes, "\n")
 			panic("Not enough hashes")
 		}
 
-		node := newInternalPatriciaNode(leftHash, bp.hashes[leftHashesUsed], rootPrefix)
+		node := newInternalPatriciaNode(leftHash, rightHash, rootPrefix)
 
-		fmt.Println("returning", node.hash())
+		fmt.Println("Only left inputs", leftHash, rightHash)
+		fmt.Println("Only left returning", node.hash())
 
 		return node.hash()
 	}
@@ -200,12 +202,13 @@ func (bp LongBatchProof) getRootHash(leafHashes []Hash) Hash {
 		if len(bp.hashes) < 1 {
 			panic("There are no hashes left, but there should be some to cover the right side")
 		}
-		rightBatchProof.hashes = bp.hashes[:rightHashesUsed]
+		leftHash := bp.hashes[0]
+		rightBatchProof.hashes = bp.hashes[1:]
 		rightHash := rightBatchProof.getRootHash(leafHashes[numLeftTargets:])
 
-		node := newInternalPatriciaNode(bp.hashes[rightHashesUsed], rightHash, rootPrefix)
+		node := newInternalPatriciaNode(leftHash, rightHash, rootPrefix)
 
-		fmt.Println("Only right inputs", bp.hashes[rightHashesUsed], rightHash)
+		fmt.Println("Only right inputs", leftHash, rightHash)
 		fmt.Println("Only right returning", node.hash())
 
 		return node.hash()

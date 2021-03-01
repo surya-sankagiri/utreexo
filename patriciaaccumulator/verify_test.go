@@ -177,6 +177,68 @@ func TestMediumVerifyLeft(t *testing.T) {
 	}
 }
 
+func TestLargeVerify(t *testing.T) {
+
+	usr, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	home := usr.HomeDir
+	dir := home + "/Library/Application Support/Bitcoin/"
+
+	err = os.Chdir(dir + "blocks")
+	if err != nil {
+		panic(err)
+	}
+
+	f := NewForest(nil, false)
+
+	leaves := make([]Leaf, 0)
+
+	// Create all the leaves
+	for i := 0; i < 25; i++ {
+		leaves = append(leaves, Leaf{Hash: Hash{uint8(i)}})
+	}
+	// Add the leaves to the tree
+	for i := 0; i < 25; i++ {
+		_, err = f.Modify([]Leaf{leaves[i]}, []uint64{})
+		if err != nil {
+			t.Fail()
+		}
+	}
+
+	_, err = f.Modify([]Leaf{}, []uint64{1, 2, 5, 6, 7, 8, 13, 14, 20, 21, 22})
+
+	if err != nil {
+		t.Fail()
+	}
+
+	delHashes := []Hash{leaves[10].Hash, leaves[11].Hash, leaves[17].Hash, leaves[18].Hash}
+
+	bp, err := f.ProveBatch(delHashes)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// if bp.String() != "(BatchProof - Targets: [10 11 17 18] hashes: [9f84f0db6702 85a66be3e6cc ab825481919c bd06aa19ec7d a107ec06834d 03140448505c b285aaa424ad] prefixLogWidths [0 1 2 3 4 5 0 0 1 2 3 4 0 1])" {
+	// 	fmt.Print("bp.String is", bp.String())
+	// 	fmt.Print("but should be", "(BatchProof - Targets: [10 11 17 18] hashes: [9f84f0db6702 85a66be3e6cc ab825481919c bd06aa19ec7d a107ec06834d 03140448505c b285aaa424ad] prefixLogWidths [0 1 2 3 4 5 0 0 1 2 3 4 0 1])")
+	// 	t.Fatal("wrong value")
+	// }
+
+	fmt.Print("Foo\n")
+	fmt.Print(f)
+	fmt.Print(bp)
+
+	correct := verifyBatchProof(bp, f.lookup.stateRoot, delHashes)
+
+	if !correct {
+		t.Fatal("verification failed")
+	}
+}
+
 func TestChainVerify(t *testing.T) {
 
 	// Setup accumulator

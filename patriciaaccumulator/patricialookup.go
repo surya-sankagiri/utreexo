@@ -147,92 +147,135 @@ func (t *patriciaLookup) RetrieveListProofs(targets []uint64) ([]PatriciaProof, 
 
 }
 
-// RetrieveBatchProofShort creates a proof for a batch of targets against a state root
+func (t *patriciaLookup) RetrieveBatchProofAgainstRoot(targets []uint64, root Hash) BatchProof {
+	// If no targets, return empty batchproof
+	if len(targets) == 0 {
+		fmt.Println("empty")
+		return BatchProof{targets, make([]Hash, 0, 0), make([]uint8, 0, 0)}
+	}
+	// Otherwise, compute the proofs for the left and right halves
+
+	rootNode, ok := t.treeNodes.read(root)
+	if !ok {
+		panic("state root not found")
+	}
+
+	if rootNode.prefix.isSingleton() {
+		if len(targets) != 1 {
+			panic("There should be only one target")
+		}
+		fmt.Println("Singleton", []uint8{0})
+		logWidths := make([]uint8, 1)
+		logWidths[0] = uint8(0)
+		proof := BatchProof{targets, []Hash{}, logWidths}
+		if proof.prefixLogWidths[0] != 0 {
+			panic("fuclk")
+		}
+		return proof
+	}
+
+	// divide targets into left and right half
+	breakpoint := len(targets)
+	for i, value := range targets {
+		if !rootNode.prefix.left().contains(value) {
+			breakpoint = i
+			break
+		}
+	}
+
+	if breakpoint == 0 {
+		// All targets in right, none in left
+		rightProof := t.RetrieveBatchProofAgainstRoot(targets[breakpoint:], rootNode.right)
+		// The hashes are the left hash followed by the right hashes
+		hashes := append([]Hash{rootNode.left}, rightProof.hashes...)
+		// The prefix log widths are the prefix log widths of the left, with the current log width inserted after the largest value, followed by the prefix log widths of the right.
+		maxLogWidthInRight := uint8(0)
+		idx := 0
+		for i, lw := range rightProof.prefixLogWidths {
+			if lw >= maxLogWidthInRight {
+				maxLogWidthInRight = lw
+				idx = i
+			}
+		}
+		prefixLogWidths := make([]uint8, 0)
+		prefixLogWidths = append(prefixLogWidths, rightProof.prefixLogWidths[:idx+1]...)
+		prefixLogWidths = append(prefixLogWidths, rootNode.prefix.logWidth())
+		prefixLogWidths = append(prefixLogWidths, rightProof.prefixLogWidths[idx+1:]...)
+
+		fmt.Println("right", prefixLogWidths)
+		return BatchProof{targets, hashes, prefixLogWidths}
+
+	} else if breakpoint == len(targets) {
+		// All on the left, none on the right
+
+		leftProof := t.RetrieveBatchProofAgainstRoot(targets[:breakpoint], rootNode.left)
+
+		// The hashes are the left hashes followed by the right hash
+		hashes := append(leftProof.hashes, rootNode.right)
+		// The prefix log widths are the prefix log widths of the left, with the current log width inserted after the largest value, followed by the prefix log widths of the right.
+		maxLogWidthInLeft := uint8(0)
+		idx := 0
+		for i, lw := range leftProof.prefixLogWidths {
+			if lw >= maxLogWidthInLeft {
+				maxLogWidthInLeft = lw
+				idx = i
+			}
+		}
+		prefixLogWidths := make([]uint8, 0)
+		prefixLogWidths = append(prefixLogWidths, leftProof.prefixLogWidths[:idx+1]...)
+		prefixLogWidths = append(prefixLogWidths, rootNode.prefix.logWidth())
+		prefixLogWidths = append(prefixLogWidths, leftProof.prefixLogWidths[idx+1:]...)
+		fmt.Println("left", prefixLogWidths)
+
+		return BatchProof{targets, hashes, prefixLogWidths}
+	} else {
+		// Targets on both sides
+
+		fmt.Println("a", targets, breakpoint, rootNode.left)
+		leftProof := t.RetrieveBatchProofAgainstRoot(targets[:breakpoint], rootNode.left)
+		if leftProof.prefixLogWidths[0] != 0 {
+			panic("It's wrong")
+		}
+		fmt.Println("b", leftProof.prefixLogWidths)
+
+		rightProof := t.RetrieveBatchProofAgainstRoot(targets[breakpoint:], rootNode.right)
+		// The hashes are the left hashes followed by the right hashes
+		hashes := append(leftProof.hashes, rightProof.hashes...)
+		// The prefix log widths are the prefix log widths of the left, with the current log width inserted after the largest value, followed by the prefix log widths of the right.
+		maxLogWidthInLeft := uint8(0)
+		idx := 0
+		for i, lw := range leftProof.prefixLogWidths {
+			if lw >= maxLogWidthInLeft {
+				maxLogWidthInLeft = lw
+				idx = i
+			}
+		}
+		// fmt.Println("c", leftProof.prefixLogWidths)
+		prefixLogWidths := make([]uint8, 0)
+		prefixLogWidths = append(prefixLogWidths, leftProof.prefixLogWidths[:idx+1]...)
+		prefixLogWidths = append(prefixLogWidths, rootNode.prefix.logWidth())
+		// fmt.Println("f", leftProof.prefixLogWidths)
+		prefixLogWidths = append(prefixLogWidths, leftProof.prefixLogWidths[idx+1:]...)
+		// fmt.Println("e", leftProof.prefixLogWidths)
+		prefixLogWidths = append(prefixLogWidths, rightProof.prefixLogWidths...)
+		// fmt.Println("d", leftProof.prefixLogWidths)
+		// fmt.Println(rootNode.prefix, "both", leftProof.prefixLogWidths, rightProof.prefixLogWidths, idx, prefixLogWidths)
+
+		return BatchProof{targets, hashes, prefixLogWidths}
+
+	}
+}
+
+// RetrieveBatchProoShort creates a proof for a batch of targets against a state root
 // The proof consists of:
 //   The targets we are proving for (in left to right order) (aka ascending order)
-// 	 all midpoints on the main branches from the root to the proved leaves, represented as widths (uint8), in DFS order. ()
-//   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in DFS order with lower level nodes first, the order the hashes will be needed when the stateless node reconstructs the proof branches)
+// 	 all prefixes on the main branches from the root to the proved leaves, represented as widths (uint8), in DFS order. ()
+//   all hashes of nodes that are neighbors of nodes on the main branches, but not on a main branch themselves (in the order they would be encountered on a recursive depth first search)
 // NOTE: This version is meant to trim the data that's not needed,
 // TODO abstract this into two functions, one that makes a long batch proof, one that shortens it
 func (t *patriciaLookup) RetrieveBatchProof(targets []uint64) BatchProof {
 
-	// If no targets, return empty batchproof
-	if len(targets) == 0 {
-		return BatchProof{targets, make([]Hash, 0, 0), make([]uint8, 0, 0)}
-	}
-
-	// A slice of proofs of individual elements
-	// RetrieveListProofs creates a list of individual proofs for targets, **in sorted order**
-	logrus.Trace("Calling RetrieveListProofs")
-	individualProofs, _ := t.RetrieveListProofs(targets)
-	// prefixesWidth is a slice that will go into the BatchProof; it will replace the slice of prefixes
-	// TODO: convert prefixesWidth to []uint8
-	var prefixLogWidths = make([]uint8, 0, 0)
-	// prefixesSet is used to remove repeated entries
-	var prefixesSet = make(map[prefixRange]bool)
-
-	// Add prefixes, one individualProof at a time, to prefixesWidth, and use prefixesSet to remove redundancies
-	for _, proof := range individualProofs {
-		// prefixLogWidths = append(prefixLogWidths, 0)
-		for _, prefix := range proof.prefixes {
-			//check if this prefix has already been seen before
-			if _, ok := prefixesSet[prefix]; !ok {
-				prefixesSet[prefix] = true
-				logWidth := prefix.logWidth()
-				prefixLogWidths = append(prefixLogWidths, logWidth)
-			}
-		}
-	}
-
-	hashesToDelete := make(map[Hash]bool)
-
-	allHashes := make([]Hash, len(individualProofs[0].hashes))
-	copy(allHashes, individualProofs[0].hashes)
-
-	// To compress this data into a BatchProof we must remove
-	// the hash children of nodes which occur in two individual proofs but fork
-	for i := 1; i < len(individualProofs); i++ {
-		proofCurrent := individualProofs[i]
-		proofPrev := individualProofs[i-1]
-		// fmt.Println(proofCurrent)
-		// fmt.Println(proofPrev)
-		// Iterate through i and i-1 to find the fork
-		for j := range proofCurrent.prefixes {
-			if proofCurrent.prefixes[len(proofCurrent.prefixes)-j-1] != proofPrev.prefixes[len(proofPrev.prefixes)-j-1] {
-				// Fork found
-				// Delete the hashes at j-1 from both
-				// filterDelete(hashes, proofCurrent.hashes[j-1])
-				hashesToDelete[proofPrev.hashes[len(proofPrev.hashes)-j]] = true
-				// Now add the hashes from currentProof from after the fork
-				allHashes = append(allHashes, proofCurrent.hashes[:len(proofCurrent.hashes)-j]...)
-				break
-			}
-		}
-	}
-
-	// Delete deletable hashes
-	hashes := make([]Hash, 0, 0)
-	for _, hash := range allHashes {
-		if !hashesToDelete[hash] {
-			hashes = append(hashes, hash)
-		}
-	}
-
-	sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
-
-	numZeros := 0
-	for _, logWidth := range prefixLogWidths {
-		if logWidth == 0 {
-			numZeros++
-		}
-	}
-	if numZeros != len(targets) {
-		fmt.Printf("Num zeros %d\n", numZeros)
-		fmt.Printf("Num targets %d\n", len(targets))
-		panic("Wrong number of zeros")
-	}
-
-	return BatchProof{targets, hashes, prefixLogWidths}
+	return t.RetrieveBatchProofAgainstRoot(targets, t.stateRoot)
 }
 
 // ProveBatch Returns a BatchProof proving a list of hashes against a forest
