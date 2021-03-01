@@ -6,11 +6,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+
+	//
 	"runtime/pprof"
 	"runtime/trace"
 	"syscall"
 
 	"github.com/btcsuite/btcd/chaincfg"
+
+	_ "net/http/pprof"
 
 	bridge "github.com/surya-sankagiri/utreexo/bridgenode"
 	"github.com/surya-sankagiri/utreexo/util"

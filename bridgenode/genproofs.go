@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
 	"sync"
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/sirupsen/logrus"
 	accumulator "github.com/surya-sankagiri/utreexo/patriciaaccumulator"
 
 	"github.com/surya-sankagiri/utreexo/util"
@@ -20,7 +22,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-// build the bridge node / proofs
+// BuildProofs builds the bridge node / proofs
 func BuildProofs(
 	param chaincfg.Params, dataDir string,
 	forestInRam, forestCached bool, sig chan bool) error {
@@ -95,9 +97,22 @@ func BuildProofs(
 	}
 	datafile.WriteString("Block Number, Uncompressed, zlib, gzip, flate")
 	defer datafile.Close()
+
+	logfile, err := os.OpenFile("logfile.log",
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+	}
+
 	start := time.Now()
+
+	// Set logging level
+	logrus.SetOutput(logfile)
+	logrus.SetLevel(logrus.InfoLevel)
 	for ; height != knownTipHeight && !stop; height++ {
-		t0 := time.Now()
+
+		logrus.Debug("Beginning Proof Loop")
+
 		// Receive txs from the asynchronous blk*.dat reader
 		bnr := <-blockAndRevReadQueue
 
@@ -112,10 +127,13 @@ func BuildProofs(
 
 		// use the accumulator to get inclusion proofs, and produce a block
 		// proof with all data needed to verify the block
+		logrus.Trace("Calling genUData")
+		t0 := time.Now()
 		ud, err := genUData(delLeaves, forest, bnr.Height)
 		if err != nil {
 			return err
 		}
+		logrus.Debug("UDATA generated")
 
 		// convert UData struct to bytes
 		// Commenting this out to go easy on my harddisk -Bolton
@@ -146,6 +164,7 @@ func BuildProofs(
 		// flateLength := len(flateBuf.Bytes())
 		// t4 := time.Now()
 
+		logrus.Debug("Writing proof size data")
 		_, err = datafile.WriteString(
 			fmt.Sprintf("%d, %d, %d,\n", height, uncompressedLength, zlibLength)) // %d, %d, gzipLength, flateLength
 
@@ -164,6 +183,8 @@ func BuildProofs(
 		// fmt.Printf("h %d adds %d targets %d\n",
 		// 	height, len(blockAdds), len(ud.AccProof.Targets))
 
+		logrus.Trace("Calling modify")
+
 		// TODO: Don't ignore undoblock
 		// Modifies the forest with the given TXINs and TXOUTs
 		_, err = forest.Modify(blockAdds, ud.AccProof.Targets)
@@ -173,13 +194,22 @@ func BuildProofs(
 
 		if bnr.Height%100 == 0 {
 			fmt.Println("On block :", bnr.Height+1)
+			logrus.Println("On block :", bnr.Height+1)
 			t := time.Now()
-			fmt.Println("Time elapsed: ", t.Sub(start))
-			fmt.Println("Time for building proofs:", t1.Sub(t0))
-			fmt.Println("Time for zlib:", t2.Sub(t1))
-			// fmt.Println("Time for gzip:", t3.Sub(t2))
-			// fmt.Println("Time for flaked:", t4.Sub(t3))
-			fmt.Println("Time for modifying forest:", t.Sub(t2))
+			logrus.Println("Time elapsed: ", t.Sub(start))
+			logrus.Println("Time for building proofs:", t1.Sub(t0))
+			logrus.Println("Time for zlib:", t2.Sub(t1))
+			// logrus.Println("Time for gzip:", t3.Sub(t2))
+			// logrus.Println("Time for flaked:", t4.Sub(t3))
+			logrus.Println("Time for modifying forest:", t.Sub(t2))
+
+			// logrus.Println("Disk Slots Used:", forest.DiskSlotsUsed())
+			// logrus.Println("Number of Leaves", forest.LeafLocationSize())
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			logrus.Println("Alloc:", m.Alloc,
+				"TotalAlloc:", m.TotalAlloc,
+				"HeapAlloc:", m.HeapAlloc)
 		}
 
 		// Check if stopSig is no longer false
@@ -402,6 +432,7 @@ func genUData(delLeaves []util.LeafData, f *accumulator.Forest, height int32) (
 	// generate block proof. Errors if the tx cannot be proven
 	// Should never error out with genproofs as it takes
 	// blk*.dat files which have already been vetted by Bitcoin Core
+	logrus.Trace("Calling ProveBatch")
 	ud.AccProof, err = f.ProveBatch(delHashes)
 	if err != nil {
 		err = fmt.Errorf("genUData failed at block %d %s %s",
@@ -552,7 +583,7 @@ func stopBuildProofs(
 	// Sometimes there are bugs that make the program run forever.
 	// Utreexo binary should never take more than 10 seconds to exit
 	go func() {
-		time.Sleep(60 * time.Second)
+		time.Sleep(10 * time.Second)
 		fmt.Println("Program timed out. Force quitting. Data likely corrupted")
 		os.Exit(1)
 	}()
