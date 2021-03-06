@@ -56,41 +56,41 @@ func TestModifyUnsortedDels(t *testing.T) {
 	}
 }
 
-const correctString = `Root is: [117 8 236 126 131 44]
-hash [117 8 236 126 131 44] prefix:(Range from 0 to 2) left [35 73 48 245 167 225] right [7 160 72 78 1 132]
- leafnode hash [35 73 48 245 167 225] at postion 0 left [1 0 0 0 0 0] right [1 0 0 0 0 0]
- leafnode hash [7 160 72 78 1 132] at postion 1 left [2 0 0 0 0 0] right [2 0 0 0 0 0]
+// const correctString = `Root is: [117 8 236 126 131 44]
+// hash [117 8 236 126 131 44] prefix:(Range from 0 to 2) left [35 73 48 245 167 225] right [7 160 72 78 1 132]
+//  leafnode hash [35 73 48 245 167 225] at postion 0 left [1 0 0 0 0 0] right [1 0 0 0 0 0]
+//  leafnode hash [7 160 72 78 1 132] at postion 1 left [2 0 0 0 0 0] right [2 0 0 0 0 0]
 
-`
+// `
 
-func TestForestString(t *testing.T) {
+// func TestForestString(t *testing.T) {
 
-	err := os.Chdir("/Users/boltonbailey/Library/Application Support/Bitcoin/blocks")
-	if err != nil {
-		panic(err)
-	}
+// 	err := os.Chdir("/Users/boltonbailey/Library/Application Support/Bitcoin/blocks")
+// 	if err != nil {
+// 		panic(err)
+// 	}
 
-	f := NewForest(nil, false)
+// 	f := NewForest(nil, false)
 
-	leaf1 := Leaf{Hash: Hash{1}}
-	leaf2 := Leaf{Hash: Hash{2}}
+// 	leaf1 := Leaf{Hash: Hash{1}}
+// 	leaf2 := Leaf{Hash: Hash{2}}
 
-	_, err = f.Modify([]Leaf{leaf1}, nil)
-	if err != nil {
-		t.Fail()
-	}
+// 	_, err = f.Modify([]Leaf{leaf1}, nil)
+// 	if err != nil {
+// 		t.Fail()
+// 	}
 
-	_, err = f.Modify([]Leaf{leaf2}, nil)
-	if err != nil {
-		t.Fail()
-	}
+// 	_, err = f.Modify([]Leaf{leaf2}, nil)
+// 	if err != nil {
+// 		t.Fail()
+// 	}
 
-	if f.String() != correctString {
-		fmt.Print(f.String())
-		fmt.Print(correctString)
-		t.Fail()
-	}
-}
+// 	if f.String() != correctString {
+// 		fmt.Print(f.String())
+// 		fmt.Print(correctString)
+// 		t.Fatal("String not correct")
+// 	}
+// }
 
 func TestForestAddDel(t *testing.T) {
 

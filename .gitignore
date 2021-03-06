@@ -1,4 +1,6 @@
 *.csv
+logfiles/*
+*.mp4
 *.txos
 *.swp
 *.swo
